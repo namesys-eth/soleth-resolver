@@ -9,4 +9,5 @@ optimizer = true
 viaIR = true
 
 # The number of optimizer runs
-optimizer_runs = 6666
+optimizer_runs = 666
+gas_reports = ["isDev"]

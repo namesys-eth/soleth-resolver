@@ -8,8 +8,10 @@ out/
 /broadcast/**/dry-run/
 
 # Docs
-docs/
+#docs/
 
 # Dotenv file
 .env
 scratch
+node_modules
+worker

@@ -101,7 +101,7 @@ interface iToken {
     function ownerOf(uint256 id) external view returns (address);
     function transferFrom(address from, address to, uint256 bal) external;
     function transfer(address to, uint256 bal) external;
-    function balanceOf(address to) external view returns(uint256 bal);
+    function balanceOf(address to) external view returns (uint256 bal);
     function safeTransferFrom(address from, address to, uint256 bal) external;
 }
 
