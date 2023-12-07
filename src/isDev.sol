@@ -6,8 +6,9 @@ import "./Utils.sol";
 
 contract isDev is iERC165, iERC173 {
     using Utils for *;
+
     address public owner;
-    
+
     iENS public immutable ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
     error OffchainLookup(address _to, string[] _urlss, bytes _data, bytes4 _callbackFunction, bytes _extradata);
@@ -30,16 +31,17 @@ contract isDev is iERC165, iERC173 {
     bytes32 public immutable ENSROOT = keccak256(abi.encodePacked(bytes32(0), "eth"));
 
     constructor() {
+        owner = msg.sender;
         funcMap[iResolver.addr.selector] = "address/60";
         funcMap[iResolver.pubkey.selector] = "pubkey";
         funcMap[iResolver.name.selector] = "name"; // NOT used fo reverse lookup
         funcMap[iResolver.contenthash.selector] = "contenthash";
 
-        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), "eth"));
-        bytes32 _nh = keccak256(abi.encodePacked(_namehash, "isdev"));
+        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        bytes32 _nh = keccak256(abi.encodePacked(_namehash, keccak256("isdev")));
         coreDomain[_nh] = true;
         web2Gateway[_nh] = "namesys-eth.github.io/isdev.eth";
-        _nh = keccak256(abi.encodePacked(_namehash, "hello123"));
+        _nh = keccak256(abi.encodePacked(_namehash, keccak256("hello123")));
         coreDomain[_nh] = true;
         web2Gateway[_nh] = "namesys-eth.github.io";
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
@@ -54,24 +56,23 @@ contract isDev is iERC165, iERC173 {
         uint256 level;
         uint256 ptr;
         uint256 len;
-        bytes[] memory _labels = new bytes[](42);
+        bytes[] memory _labels = new bytes[](43);
         string memory _path;
         while (name[ptr] > 0x0) {
             len = uint8(bytes1(name[ptr:++ptr]));
-            _labels[level++] = name[ptr:ptr += len];
+            _labels[level] = name[ptr:ptr += len];
             _path = string.concat(string(_labels[level++]), "/", _path);
         }
-        string[] memory _urls;
+        string[] memory _urls = new string[](2);
         string memory _recordType = jsonFile(request);
         string memory _gateway;
-        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), _labels[level - 1]));
-        _namehash = keccak256(abi.encodePacked(_namehash, _labels[level - 2]));
+        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[level - 1])));
+        _namehash = keccak256(abi.encodePacked(_namehash, keccak256(_labels[level - 2])));
         if (coreDomain[_namehash]) {
-            _urls = new string[](3);
             if (level > 2) {
                 _gateway = string.concat(string(_labels[level - 3]), ".github.io");
                 //user.isdev.eth
-                _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, "/", _recordType, ".json?{data}");
+                _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
                 _urls[1] = string.concat(
                     "https://raw.githubusercontent.com/",
                     string(_labels[level - 3]),
@@ -79,33 +80,18 @@ contract isDev is iERC165, iERC173 {
                     _gateway,
                     "/main/.well-known/",
                     _path,
-                    "/",
-                    _recordType,
-                    ".json?{data}"
-                );
-                _urls[2] = string.concat(
-                    "https://raw.githubusercontent.com/",
-                    string(_labels[level - 3]),
-                    "/",
-                    _gateway,
-                    "/main/docs/.well-known/",
-                    _path,
-                    "/",
                     _recordType,
                     ".json?{data}"
                 );
             } else {
-                _urls = new string[](2);
                 _urls[0] = string.concat(
-                    "https://", web2Gateway[_namehash], "/.well-known/", _path, "/", _recordType, ".json?{data}"
+                    "https://", web2Gateway[_namehash], "/.well-known/", _path, _recordType, ".json?{data}"
                 );
                 _urls[1] = _urls[0]; // retry
             }
         } else if (bytes(web2Gateway[_namehash]).length != 0) {
-            _urls = new string[](2);
-            _urls[0] = string.concat(
-                "https://", web2Gateway[_namehash], "/.well-known/", _path, "/", _recordType, ".json?{data}"
-            );
+            _urls[0] =
+                string.concat("https://", web2Gateway[_namehash], "/.well-known/", _path, _recordType, ".json?{data}");
             _urls[1] = _urls[0]; // retry
         } else {
             revert InvalidRequest("BAD_GATEWAY");
@@ -134,17 +120,13 @@ contract isDev is iERC165, iERC173 {
             string memory _gateway,
             string memory _recType
         ) = abi.decode(extradata, (uint256, bytes32, bytes32, bytes32, string, string));
-        if (block.number > _blocknumber + 5) {
-            revert InvalidRequest("BLOCK_TIMEOUT");
+        if (block.number > _blocknumber + 3) {
+            revert InvalidRequest("CALLBACK_TIMEOUT");
         }
         if (_checkhash != keccak256(abi.encodePacked(this, blockhash(_blocknumber - 1), _callhash))) {
             revert InvalidRequest("CHECKSUM_FAILED");
         }
-        //bytes4 _type = bytes4(response[:4]);
-        // result must be abi encoded to resolver's request type
-        if (bytes4(response[:4]) == iCallbackType.plaintextRecord.selector) {
-            return response[4:];
-        } else if (bytes4(response[:4]) != iCallbackType.signedRecord.selector) {
+        if (bytes4(response[:4]) != iCallbackType.signedRecord.selector) {
             revert InvalidRequest("BAD_RECORD_PREFIX");
         }
         (address _signer, bytes memory _recordSig, bytes memory _approvedSig, bytes memory _result) =
@@ -183,6 +165,10 @@ contract isDev is iERC165, iERC173 {
                 "Requesting Signature To Update ENS Record\n",
                 "\nGateway: https://",
                 _gateway,
+                "\nResolver: eip155:",
+                chainID,
+                ":",
+                address(this).toChecksumAddress(),
                 "\nRecord Type: ",
                 _recType,
                 "\nExtradata: 0x",
@@ -275,7 +261,7 @@ contract isDev is iERC165, iERC173 {
 
     function addCoreDomain(string calldata _label, string calldata _gateway) external payable {
         if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
-        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, _label));
+        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
         if (bytes(web2Gateway[_namehash]).length > 0) revert InvalidRequest("INVALID_DOMAIN");
         web2Gateway[_namehash] = _gateway;
         coreDomain[_namehash] = true;
@@ -289,7 +275,7 @@ contract isDev is iERC165, iERC173 {
     }
 
     function addYourENS(string calldata _label, string calldata _gateway) external payable {
-        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, _label));
+        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
         address _manager = ENS.owner(_namehash);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_namehash));
@@ -299,7 +285,7 @@ contract isDev is iERC165, iERC173 {
     }
 
     function addYourENS(string calldata _label, string calldata _gateway, address _signer) external payable {
-        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, _label));
+        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
         address _manager = ENS.owner(_namehash);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_namehash));
@@ -320,6 +306,7 @@ contract isDev is iERC165, iERC173 {
     function withdraw() external {
         payable(owner).transfer(address(this).balance);
     }
+
     fallback() external payable {
         revert();
     }
@@ -327,5 +314,4 @@ contract isDev is iERC165, iERC173 {
     receive() external payable {
         revert();
     }
-
 }

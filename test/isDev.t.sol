@@ -7,10 +7,109 @@ import "../src/Utils.sol";
 
 contract isDevTest is Test {
     using Utils for *;
+    using Helper for *;
 
-    isDev public _isdev = new isDev();
+    isDev public ISDEV = new isDev();
 
     function setUp() public {}
+
+    function testFlow() public {
+        bytes[] memory _name = new bytes[](3);
+        _name[0] = "0xc0de4c0ffee";
+        _name[1] = "isdev";
+        _name[2] = "eth";
+        (bytes32 _node, bytes memory _encoded) = Helper.Encode(_name);
+        console2.logBytes32(_node);
+        uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+        //uint256 OwnerKey = 0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd;
+        uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
+        address _approver = vm.addr(ApproverKey);
+        address _signer = vm.addr(SignerKey);
+        bytes32 isdevNode = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        isdevNode = keccak256(abi.encodePacked(isdevNode, keccak256("isdev")));
+        console2.logBytes32(isdevNode);
+
+        //vm.prank(ENS.owner(_node));
+        //ENS.setOwner(_node, _owner);
+        //bytes memory _recordhash =
+        //    hex"e50101720024080112203c5aba6c9b5055a5fa12281c486188ed8ae2b6ef394b3d981b00d17a4b51735c";
+        //vm.prank(_owner);
+        //ccip2eth.setRecordhash(_node, _recordhash);
+
+        (string memory _path, string memory _domain) = _encoded.Decode();
+        bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
+        console2.logString(_domain);
+        bytes memory _calldata = abi.encodeWithSelector(isDev.resolve.selector, _encoded, _request);
+        string memory _recType = ISDEV.jsonFile(_request);
+        bytes32 _callhash = keccak256(_calldata);
+        bytes32 _checkhash = keccak256(abi.encodePacked(address(ISDEV), blockhash(block.number - 1), _callhash));
+        string memory _gateway = "0xc0de4c0ffee.github.io";
+        string[] memory _urls = new string[](2);
+        _urls[0] = "https://0xc0de4c0ffee.github.io/.well-known/eth/isdev/0xc0de4c0ffee/address/60.json?{data}";
+        _urls[1] =
+            "https://raw.githubusercontent.com/0xc0de4c0ffee/0xc0de4c0ffee.github.io/main/.well-known/eth/isdev/0xc0de4c0ffee/address/60.json?{data}";
+
+        bytes memory _extradata =
+            abi.encode(block.number, _callhash, _checkhash, isdevNode, _gateway, string("address/60"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                iENSIP10.OffchainLookup.selector,
+                address(ISDEV),
+                _urls,
+                abi.encodePacked(uint16(block.timestamp / 60)),
+                isDev.__callback.selector,
+                _extradata
+            )
+        );
+        ISDEV.resolve(_encoded, _request);
+        /*
+        bytes memory _result = abi.encode(address(this));
+        string memory signRequest = string.concat(
+            "Requesting Signature To Update ENS Record\n",
+            "\nOrigin: ",
+            _domain,
+            "\nRecord Type: address/60",
+            "\nExtradata: 0x",
+            gateway.bytesToHexString(abi.encodePacked(keccak256(_result)), 0),
+            "\nSigned By: eip155:",
+            chainID,
+            ":",
+            gateway.toChecksumAddress(address(_signer))
+        );
+        bytes32 _digest = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n", gateway.uintToString(bytes(signRequest).length), signRequest
+            )
+        );
+        assertTrue(!ccip2eth.approved(_node, _signer));
+        assertTrue(!ccip2eth.isApprovedSigner(address(this), _node, _signer));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(SignerKey, _digest);
+        bytes memory _recordSig = abi.encodePacked(r, s, v);
+        signRequest = string.concat(
+            "Requesting Signature To Approve ENS Records Signer\n",
+            "\nOrigin: ",
+            _domain,
+            "\nApproved Signer: eip155:",
+            chainID,
+            ":",
+            gateway.toChecksumAddress(_signer),
+            "\nApproved By: eip155:",
+            chainID,
+            ":",
+            gateway.toChecksumAddress(_owner)
+        );
+        _digest = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n", gateway.uintToString(bytes(signRequest).length), signRequest
+            )
+        );
+        (v, r, s) = vm.sign(OwnerKey, _digest);
+        bytes memory _approvedSig = abi.encodePacked(r, s, v);
+        bytes memory _response =
+            abi.encodeWithSelector(iCallbackType.signedRecord.selector, _signer, _recordSig, _approvedSig, _result);
+        assertEq(_result, ccip2eth.__callback(_response, _extradata));
+        */
+    }
 
     function testSigner() public {
         uint256 SignerKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
@@ -31,12 +130,12 @@ contract isDevTest is Test {
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(SignerKey, _digest);
         bytes memory _signature = abi.encodePacked(r, s, v);
-        assertEq(_signer, _isdev.getSigner(_message, _signature));
+        assertEq(_signer, ISDEV.getSigner(_message, _signature));
         _signature = abi.encodePacked(r, s, uint256(v));
-        assertEq(_signer, _isdev.getSigner(_message, _signature));
+        assertEq(_signer, ISDEV.getSigner(_message, _signature));
         bytes32 vs = bytes32(uint256(v - 27) << 255) | s;
         _signature = abi.encodePacked(r, vs);
-        assertEq(_signer, _isdev.getSigner(_message, _signature));
+        assertEq(_signer, ISDEV.getSigner(_message, _signature));
     }
 
     function testChecksumAddress() public {
@@ -89,10 +188,13 @@ contract isDevTest is Test {
         assertEq(0.log10(), 0);
         assertEq(type(uint256).max.log10(), 77);
     }
-}
 
+    function testCoreDomains() public {}
+}
+//0x7a819cebeb5ae713d09ffa208a16e9018d0b272122f86b6c0ab10e3d65a11431
 /// @dev Utility functions
-contract Helper {
+
+library Helper {
     function Decode(bytes calldata _encoded) external pure returns (string memory _path, string memory _domain) {
         uint256 n = 1;
         uint256 len = uint8(bytes1(_encoded[0]));
@@ -108,7 +210,7 @@ contract Helper {
         }
     }
 
-    function Encode(bytes[] memory _names) public pure returns (bytes32 _namehash, bytes memory _name) {
+    function Encode(bytes[] memory _names) external pure returns (bytes32 _namehash, bytes memory _name) {
         uint256 i = _names.length;
         _name = abi.encodePacked(bytes1(0));
         _namehash = bytes32(0);
