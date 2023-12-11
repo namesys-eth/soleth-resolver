@@ -4,7 +4,7 @@ pragma solidity >0.8.0 <0.9.0;
 import "./Interface.sol";
 import "./Utils.sol";
 
-contract isDev is iERC165, iERC173 {
+contract Dev3 is iERC165, iERC173 {
     using Utils for *;
 
     address public owner;
@@ -19,33 +19,35 @@ contract isDev is iERC165, iERC173 {
     string public chainID = block.chainid == 1 ? "1" : "5";
 
     function supportsInterface(bytes4 _selector) external pure returns (bool) {
-        return (_selector == isDev.resolve.selector || _selector == isDev.supportsInterface.selector);
+        return (_selector == Dev3.resolve.selector || _selector == Dev3.supportsInterface.selector);
     }
 
-    mapping(address => uint256) public subManager;
+    //mapping(address => uint256) public subManager;
+    struct Space {
+        bool _core;
+        string _path;
+    }
+
+    mapping(bytes32 => Space) public subSpace;
     mapping(bytes4 => string) public funcMap;
-    mapping(bytes32 => string) public web2Gateway;
-    mapping(bytes32 => bool) public coreDomain;
-    mapping(address => mapping(address => bool)) public isApprovedfor;
+    mapping(address => mapping(address => bool)) public isApprovedSigner;
     mapping(address => bool) public isWrapper;
-    bytes32 public immutable ENSROOT = keccak256(abi.encodePacked(bytes32(0), "eth"));
 
     constructor() {
         owner = msg.sender;
         funcMap[iResolver.addr.selector] = "address/60";
         funcMap[iResolver.pubkey.selector] = "pubkey";
-        funcMap[iResolver.name.selector] = "name"; // NOT used fo reverse lookup
+        funcMap[iResolver.name.selector] = "name"; // NOT used for reverse lookup
         funcMap[iResolver.contenthash.selector] = "contenthash";
 
-        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
-        bytes32 _nh = keccak256(abi.encodePacked(_namehash, keccak256("isdev")));
-        coreDomain[_nh] = true;
-        web2Gateway[_nh] = "namesys-eth.github.io/isdev.eth";
-        _nh = keccak256(abi.encodePacked(_namehash, keccak256("hello123")));
-        coreDomain[_nh] = true;
-        web2Gateway[_nh] = "namesys-eth.github.io";
+        bytes32 _root = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        bytes32 _node = keccak256(abi.encodePacked(_root, keccak256("dev3")));
+        subSpace[_node] = Space(true, "namesys-eth.github.io");
+        _node = keccak256(abi.encodePacked(_root, keccak256("isdev")));
+        subSpace[_node] = Space(true, "namesys-eth.github.io");
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
     }
+
     /**
      * ENSIP10 Resolve Fucntion
      * @param name - DNS encoded sub./domain.eth
@@ -68,7 +70,7 @@ contract isDev is iERC165, iERC173 {
         string memory _gateway;
         bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[level - 1])));
         _namehash = keccak256(abi.encodePacked(_namehash, keccak256(_labels[level - 2])));
-        if (coreDomain[_namehash]) {
+        if (subSpace[_namehash]._core) {
             if (level > 2) {
                 _gateway = string.concat(string(_labels[level - 3]), ".github.io");
                 //user.isdev.eth
@@ -78,32 +80,34 @@ contract isDev is iERC165, iERC173 {
                     string(_labels[level - 3]),
                     "/",
                     _gateway,
-                    "/main/.well-known/",
+                    "/gh-pages/.well-known/",
                     _path,
                     _recordType,
                     ".json?{data}"
                 );
             } else {
                 _urls[0] = string.concat(
-                    "https://", web2Gateway[_namehash], "/.well-known/", _path, _recordType, ".json?{data}"
+                    "https://", subSpace[_namehash]._path, "/.well-known/", _path, _recordType, ".json?{data}"
                 );
                 _urls[1] = _urls[0]; // retry
             }
-        } else if (bytes(web2Gateway[_namehash]).length != 0) {
-            _urls[0] =
-                string.concat("https://", web2Gateway[_namehash], "/.well-known/", _path, _recordType, ".json?{data}");
+        } else if (bytes(subSpace[_namehash]._path).length != 0) {
+            _urls[0] = string.concat(
+                "https://", subSpace[_namehash]._path, "/.well-known/", _path, _recordType, ".json?{data}"
+            );
             _urls[1] = _urls[0]; // retry
         } else {
             revert InvalidRequest("BAD_GATEWAY");
         }
         bytes32 _callhash = keccak256(msg.data);
-        bytes32 _checkhash = keccak256(abi.encodePacked(this, blockhash(block.number - 1), _callhash));
+        uint256 _blockNum = block.number - 1;
+        bytes32 _checkhash = keccak256(abi.encodePacked(this, blockhash(_blockNum), _callhash));
         revert OffchainLookup(
             address(this),
             _urls,
             abi.encodePacked(uint16(block.timestamp / 60)),
-            isDev.__callback.selector,
-            abi.encode(block.number, _callhash, _checkhash, _namehash, _gateway, _recordType)
+            Dev3.__callback.selector,
+            abi.encode(_blockNum, _callhash, _checkhash, _namehash, _gateway, _recordType)
         );
     }
 
@@ -120,10 +124,10 @@ contract isDev is iERC165, iERC173 {
             string memory _gateway,
             string memory _recType
         ) = abi.decode(extradata, (uint256, bytes32, bytes32, bytes32, string, string));
-        if (block.number > _blocknumber + 3) {
+        if (block.number > _blocknumber + 4) {
             revert InvalidRequest("CALLBACK_TIMEOUT");
         }
-        if (_checkhash != keccak256(abi.encodePacked(this, blockhash(_blocknumber - 1), _callhash))) {
+        if (_checkhash != keccak256(abi.encodePacked(this, blockhash(_blocknumber), _callhash))) {
             revert InvalidRequest("CHECKSUM_FAILED");
         }
         if (bytes4(response[:4]) != iCallbackType.signedRecord.selector) {
@@ -135,8 +139,8 @@ contract isDev is iERC165, iERC173 {
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_namehash));
         }
-        if (_approvedSig.length > 63) {
-            address _approvedBy = isDev(this).getSigner(
+        if (subSpace[_namehash]._core || _approvedSig.length > 63) {
+            address _approvedBy = Dev3(this).getSigner(
                 string.concat(
                     "Requesting Signature To Approve ENS Records Signer\n",
                     "\nGateway: https://",
@@ -152,15 +156,13 @@ contract isDev is iERC165, iERC173 {
                 ),
                 _approvedSig
             );
-            if (coreDomain[_namehash] && subManager[_approvedBy] < block.timestamp) {
+            if (!isApprovedSigner[_manager][_approvedBy] && _approvedBy != _manager) {
                 revert InvalidRequest("BAD_APPROVED_SIG");
-            } else if (_approvedBy != _manager && !isApprovedfor[_manager][_approvedBy]) {
-                revert InvalidRequest("BAD_MANAGER_SIG");
             }
-        } else if (_signer != _manager && !isApprovedfor[_manager][_signer]) {
+        } else if (!isApprovedSigner[_manager][_signer]) {
             revert InvalidRequest("BAD_SIGNER");
         }
-        address _signedBy = isDev(this).getSigner(
+        address _signedBy = Dev3(this).getSigner(
             string.concat(
                 "Requesting Signature To Update ENS Record\n",
                 "\nGateway: https://",
@@ -247,56 +249,73 @@ contract isDev is iERC165, iERC173 {
     }
 
     /// @dev extra functions
-
-    function transferOwnership(address _newOwner) external payable {
+    modifier onlyOwner {
         if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+        _;
+    }
+    function transferOwnership(address _newOwner) external payable onlyOwner {
         emit OwnershipTransferred(owner, _newOwner);
         owner = _newOwner;
     }
 
-    function setSubManager(address _addr, uint256 _validity) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+    /*function setSubManager(address _addr, uint256 _validity) external payable onlyOwner {
         subManager[_addr] = _validity;
-    }
+    }*/
 
-    function addCoreDomain(string calldata _label, string calldata _gateway) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
-        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
-        if (bytes(web2Gateway[_namehash]).length > 0) revert InvalidRequest("INVALID_DOMAIN");
-        web2Gateway[_namehash] = _gateway;
-        coreDomain[_namehash] = true;
-    }
-
-    function removeCoreDomain(bytes32 _namehash) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
-        if (!coreDomain[_namehash]) revert InvalidRequest("NOT_CORE_DOMAIN");
-        delete web2Gateway[_namehash];
-        coreDomain[_namehash] = false;
-    }
-
-    function addYourENS(string calldata _label, string calldata _gateway) external payable {
-        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
-        address _manager = ENS.owner(_namehash);
-        if (isWrapper[_manager]) {
-            _manager = iToken(_manager).ownerOf(uint256(_namehash));
+    function addDomain(bytes32 _node, string calldata _gateway) external payable onlyOwner {
+        if (bytes(subSpace[_node]._path).length > 0) {
+            revert InvalidRequest("ACTIVE_DOMAIN");
         }
-        if (msg.sender != _manager) revert InvalidRequest("NOT_MANAGER");
-        web2Gateway[_namehash] = _gateway;
+        subSpace[_node] = Space(true, _gateway);
     }
 
-    function addYourENS(string calldata _label, string calldata _gateway, address _signer) external payable {
-        bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
-        address _manager = ENS.owner(_namehash);
+    function removeDomain(bytes32 _node) external payable onlyOwner {
+        if (!subSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
+        delete subSpace[_node];
+    }
+
+    function addYourENS(bytes32 _node, string calldata _gateway) external payable {
+        address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
-            _manager = iToken(_manager).ownerOf(uint256(_namehash));
+            _manager = iToken(_manager).ownerOf(uint256(_node));
         }
-        if (msg.sender != _manager) revert InvalidRequest("NOT_MANAGER");
-        web2Gateway[_namehash] = _gateway;
-        isApprovedfor[_manager][_signer] = true;
+        if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
+        subSpace[_node] = Space(false, _gateway);
     }
 
+    function addYourENS(bytes32 _node, address _signer, string calldata _gateway) external payable {
+        address _manager = ENS.owner(_node);
+        if (isWrapper[_manager]) {
+            _manager = iToken(_manager).ownerOf(uint256(_node));
+        }
+        if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
+        subSpace[_node] = Space(false, _gateway);
+        isApprovedSigner[_manager][_signer] = true;
+    }
+
+    function setYourSigner(bytes32 _node, address _signer, bool _set) external payable {
+        if (bytes(subSpace[_node]._path).length == 0) {
+            revert InvalidRequest("NOT_ACTIVE");
+        }
+        address _manager = ENS.owner(_node);
+        if (isWrapper[_manager]) {
+            _manager = iToken(_manager).ownerOf(uint256(_node));
+        }
+        if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
+        isApprovedSigner[_manager][_signer] = _set;
+    }
+
+    function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable onlyOwner{
+        if (!subSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
+        address _manager = ENS.owner(_node);
+        if (isWrapper[_manager]) {
+            _manager = iToken(_manager).ownerOf(uint256(_node));
+        }
+        isApprovedSigner[_manager][_approver] = _set;
+    }
+    
     function setChainID() external {
-        chainID = block.chainid.uintToString();
+        chainID = (block.chainid).uintToString();
     }
 
     function withdraw(address _token, uint256 _balance) external {

@@ -74,7 +74,4 @@ interface iCallbackType {
         bytes memory approvedSignature, // Signature to approve record signer
         bytes memory result // ABI-encoded result
     ) external pure returns (bytes memory);
-    function plaintextRecord(
-        bytes memory result // ABI-encoded result
-    ) external pure returns (bytes memory);
 }
