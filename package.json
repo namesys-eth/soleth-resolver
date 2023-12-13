@@ -1,8 +1,8 @@
 {
-  "name": "isdev.eth",
+  "name": "isdev-eth",
   "version": "1.0.0",
   "main": "index.js",
-  "repository": "https://github.com/namesys-eth/isdev.eth.git",
+  "repository": "https://github.com/namesys-eth/isdev-eth.git",
   "author": "0xc0de4c0ffee <43116881+0xc0de4c0ffee@users.noreply.github.com>",
   "license": "MIT",
   "scripts": {

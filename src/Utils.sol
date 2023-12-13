@@ -6,11 +6,11 @@ import "./Interface.sol";
 library Utils {
     bytes16 internal constant b16 = "0123456789abcdef";
     bytes16 internal constant B16 = "0123456789ABCDEF";
+    
     /**
      * Convert address to check-summed address string
      * @param _addr - Address
      */
-
     function toChecksumAddress(address _addr) internal pure returns (string memory) {
         if (_addr == address(0)) {
             return "0x0000000000000000000000000000000000000000";
@@ -30,11 +30,11 @@ library Utils {
         }
         return string.concat("0x", string(result));
     }
+
     /**
      * Convert bytes to hexadecimal string
      * @param _input - Bytes input to convert
      */
-
     function bytesToHexString(bytes memory _input) internal pure returns (string memory) {
         unchecked {
             uint256 len = _input.length;
@@ -48,11 +48,11 @@ library Utils {
             return string(result);
         }
     }
+
     /**
      * Convert uint to string format
      * @param _input - Uint Numbers to convert
      */
-
     function uintToString(uint256 _input) internal pure returns (string memory) {
         if (_input == 0) {
             return "0";
@@ -68,12 +68,12 @@ library Utils {
             return string(buffer);
         }
     }
-    /**
-     * Log10 of uint
-     * @param _input - number
-     * @dev MIT : https://github.com/OpenZeppelin/openzeppelin-contracts/blob/cffb2f1ddcd87efd68effc92cfd336c5145acabd/contracts/utils/math/Math.sol#L327
-     */
 
+    /**
+     * log10 of uint
+     * @param _input - number
+     * @dev https://github.com/OpenZeppelin/openzeppelin-contracts/blob/cffb2f1ddcd87efd68effc92cfd336c5145acabd/contracts/utils/math/Math.sol#L327
+     */
     function log10(uint256 _input) internal pure returns (uint256 result) {
         unchecked {
             if (_input >= 1e64) {

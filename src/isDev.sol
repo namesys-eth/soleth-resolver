@@ -46,12 +46,12 @@ contract isDev is iERC165, iERC173 {
         web2Gateway[_nh] = "namesys-eth.github.io";
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
     }
+
     /**
      * ENSIP10 Resolve Fucntion
      * @param name - DNS encoded sub./domain.eth
      * @param request - ENS Resolver request
      */
-
     function resolve(bytes calldata name, bytes calldata request) external view returns (bytes memory) {
         uint256 level;
         uint256 ptr;
@@ -71,7 +71,6 @@ contract isDev is iERC165, iERC173 {
         if (coreDomain[_namehash]) {
             if (level > 2) {
                 _gateway = string.concat(string(_labels[level - 3]), ".github.io");
-                //user.isdev.eth
                 _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
                 _urls[1] = string.concat(
                     "https://raw.githubusercontent.com/",
@@ -247,20 +246,19 @@ contract isDev is iERC165, iERC173 {
     }
 
     /// @dev extra functions
-
     function transferOwnership(address _newOwner) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+        if (msg.sender != owner) revert InvalidRequest("NOT_OWNER");
         emit OwnershipTransferred(owner, _newOwner);
         owner = _newOwner;
     }
 
     function setSubManager(address _addr, uint256 _validity) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+        if (msg.sender != owner) revert InvalidRequest("NOT_OWNER");
         subManager[_addr] = _validity;
     }
 
     function addCoreDomain(string calldata _label, string calldata _gateway) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+        if (msg.sender != owner) revert InvalidRequest("NOT_OWNER");
         bytes32 _namehash = keccak256(abi.encodePacked(ENSROOT, keccak256(bytes(_label))));
         if (bytes(web2Gateway[_namehash]).length > 0) revert InvalidRequest("INVALID_DOMAIN");
         web2Gateway[_namehash] = _gateway;
@@ -268,7 +266,7 @@ contract isDev is iERC165, iERC173 {
     }
 
     function removeCoreDomain(bytes32 _namehash) external payable {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+        if (msg.sender != owner) revert InvalidRequest("NOT_OWNER");
         if (!coreDomain[_namehash]) revert InvalidRequest("NOT_CORE_DOMAIN");
         delete web2Gateway[_namehash];
         coreDomain[_namehash] = false;
