@@ -13,6 +13,7 @@ import "../src/Utils.sol";
         //ccip2eth.setRecordhash(_node, _recordhash);
 
         //(string memory _path, string memory _domain) = _encoded.Decode();
+        0xaba6b22fbabca37113b02aa409f7e98ef96246cd0f1bd90bd095f763e9be1d12, 0x8fd379246834eac74B8419FfdA202CF8051F7A03
  */
 
 contract Dev3Test is Test {
@@ -33,6 +34,7 @@ contract Dev3Test is Test {
         uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
         uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
         address _approver = vm.addr(ApproverKey);
+        console2.log(_approver);
         address _signer = vm.addr(SignerKey);
         vm.prank(ENS.owner(_node));
         DEV3.addYourENS(_node, _approver, "example.com", "example.xyz");
