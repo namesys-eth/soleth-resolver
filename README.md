@@ -1,66 +1,14 @@
-## Foundry
+## DEV3.ETH || ISDEV.eth
+### ENS + Github Pages for CCIP-read records management
+Experimental CCIP-read gateway in Github to freely manage and update your ENS records directly from github pages. ZERO GAS, Fully Offchain soulbound to your github ID.
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+### Free Sub-domains for Dev^3
+Github repo : \<github-id>__.github.io__
 
-Foundry consists of:
+Free subdomains : 
+ * \<github-id>__.isdev.eth__
+ * \<github-id>__.dev3.eth__
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+### Extra Feature
+#### Bring Your Own Domain and your own gateway
+ * \<your-ens>.eth mapped to \<yourdomain>.com

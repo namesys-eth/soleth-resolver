@@ -4,14 +4,12 @@ pragma solidity >0.8.0 <0.9.0;
 import "./Interface.sol";
 import "./Utils.sol";
 
-contract Dev3 is iERC165, iERC173 {
+contract Dev3 is iDev3 {
     using Utils for *;
 
     address public owner;
-
     iENS public immutable ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
-    error OffchainLookup(address _to, string[] _urlss, bytes _data, bytes4 _callbackFunction, bytes _extradata);
     error InvalidRequest(string);
     error InvalidSignature(string);
     error FeatureNotImplemented(bytes4);
@@ -25,12 +23,13 @@ contract Dev3 is iERC165, iERC173 {
     //mapping(address => uint256) public subManager;
     struct Space {
         bool _core;
-        string _path;
+        string _gateway;
+        string _fallback;
     }
 
-    mapping(bytes32 => Space) public subSpace;
+    mapping(bytes32 => Space) public devSpace;
     mapping(bytes4 => string) public funcMap;
-    mapping(address => mapping(address => bool)) public isApprovedSigner;
+    mapping(bytes32 => mapping(address => bool)) public isApprovedSigner;
     mapping(address => bool) public isWrapper;
 
     constructor() {
@@ -42,14 +41,14 @@ contract Dev3 is iERC165, iERC173 {
 
         bytes32 _root = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
         bytes32 _node = keccak256(abi.encodePacked(_root, keccak256("dev3")));
-        subSpace[_node] = Space(true, "namesys-eth.github.io");
+        devSpace[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
         _node = keccak256(abi.encodePacked(_root, keccak256("isdev")));
-        subSpace[_node] = Space(true, "namesys-eth.github.io");
+        devSpace[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
     }
 
     /**
-     * ENSIP10 Resolve Fucntion
+     * ENSIP10 Resolve Function
      * @param name - DNS encoded sub./domain.eth
      * @param request - ENS Resolver request
      */
@@ -68,36 +67,37 @@ contract Dev3 is iERC165, iERC173 {
         string[] memory _urls = new string[](2);
         string memory _recordType = jsonFile(request);
         string memory _gateway;
-        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[level - 1])));
-        _namehash = keccak256(abi.encodePacked(_namehash, keccak256(_labels[level - 2])));
-        if (subSpace[_namehash]._core) {
-            if (level > 2) {
-                _gateway = string.concat(string(_labels[level - 3]), ".github.io");
-                //user.isdev.eth
-                _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
-                _urls[1] = string.concat(
-                    "https://raw.githubusercontent.com/",
-                    string(_labels[level - 3]),
-                    "/",
-                    _gateway,
-                    "/gh-pages/.well-known/",
-                    _path,
-                    _recordType,
-                    ".json?{data}"
-                );
-            } else {
-                _urls[0] = string.concat(
-                    "https://", subSpace[_namehash]._path, "/.well-known/", _path, _recordType, ".json?{data}"
-                );
-                _urls[1] = _urls[0]; // retry
+        ptr = level;
+        bytes32 _nh = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--ptr])));
+        bytes32 _node;
+        while (ptr > 0) {
+            _nh = keccak256(abi.encodePacked(_nh, keccak256(_labels[--ptr])));
+            if (bytes(devSpace[_nh]._gateway).length > 0) {
+                _node = _nh;
             }
-        } else if (bytes(subSpace[_namehash]._path).length != 0) {
-            _urls[0] = string.concat(
-                "https://", subSpace[_namehash]._path, "/.well-known/", _path, _recordType, ".json?{data}"
-            );
-            _urls[1] = _urls[0]; // retry
+        }
+        if (_node == 0x0) revert InvalidRequest("INVALID_DOMAIN");
+        if (!devSpace[_node]._core || level == 2) {
+            _gateway = devSpace[_node]._gateway;
+            _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
+            _urls[1] = bytes(devSpace[_node]._fallback).length == 0
+                ? string.concat(_urls[0], "=retry")
+                : string.concat(
+                    "https://", devSpace[_node]._fallback, "/.well-known/", _path, _recordType, ".json?{data}=retry"
+                );
         } else {
-            revert InvalidRequest("BAD_GATEWAY");
+            _gateway = string.concat(string(_labels[level - 3]), ".github.io");
+            _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
+            _urls[1] = string.concat(
+                "https://raw.githubusercontent.com/",
+                string(_labels[level - 3]),
+                "/",
+                _gateway,
+                "/main/.well-known/",
+                _path,
+                _recordType,
+                ".json?{data}"
+            );
         }
         bytes32 _callhash = keccak256(msg.data);
         uint256 _blockNum = block.number - 1;
@@ -106,8 +106,8 @@ contract Dev3 is iERC165, iERC173 {
             address(this),
             _urls,
             abi.encodePacked(uint16(block.timestamp / 60)),
-            Dev3.__callback.selector,
-            abi.encode(_blockNum, _callhash, _checkhash, _namehash, _gateway, _recordType)
+            iENSIP10.__callback.selector,
+            abi.encode(_blockNum, _callhash, _checkhash, _node, _gateway, _recordType)
         );
     }
 
@@ -120,7 +120,7 @@ contract Dev3 is iERC165, iERC173 {
             uint256 _blocknumber,
             bytes32 _callhash,
             bytes32 _checkhash,
-            bytes32 _namehash,
+            bytes32 _node,
             string memory _gateway,
             string memory _recType
         ) = abi.decode(extradata, (uint256, bytes32, bytes32, bytes32, string, string));
@@ -135,11 +135,11 @@ contract Dev3 is iERC165, iERC173 {
         }
         (address _signer, bytes memory _recordSig, bytes memory _approvedSig, bytes memory _result) =
             abi.decode(response[4:], (address, bytes, bytes, bytes));
-        address _manager = ENS.owner(_namehash);
+        address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
-            _manager = iToken(_manager).ownerOf(uint256(_namehash));
+            _manager = iToken(_manager).ownerOf(uint256(_node));
         }
-        if (subSpace[_namehash]._core || _approvedSig.length > 63) {
+        if (_approvedSig.length > 63) {
             address _approvedBy = Dev3(this).getSigner(
                 string.concat(
                     "Requesting Signature To Approve ENS Records Signer\n",
@@ -156,10 +156,12 @@ contract Dev3 is iERC165, iERC173 {
                 ),
                 _approvedSig
             );
-            if (!isApprovedSigner[_manager][_approvedBy] && _approvedBy != _manager) {
-                revert InvalidRequest("BAD_APPROVED_SIG");
+            if (devSpace[_node]._core && !isApprovedSigner[_node][_approvedBy]) {
+                revert InvalidRequest("BAD_CORE_APPROVAL");
+            } else if (!isApprovedSigner[_node][_approvedBy]) {
+                revert InvalidRequest("BAD_APPROVAL_SIG");
             }
-        } else if (!isApprovedSigner[_manager][_signer]) {
+        } else if (!isApprovedSigner[_node][_signer]) {
             revert InvalidRequest("BAD_SIGNER");
         }
         address _signedBy = Dev3(this).getSigner(
@@ -249,52 +251,57 @@ contract Dev3 is iERC165, iERC173 {
     }
 
     /// @dev extra functions
-    modifier onlyOwner {
+
+    modifier onlyDev() {
         if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
         _;
     }
-    function transferOwnership(address _newOwner) external payable onlyOwner {
+
+    function transferOwnership(address _newOwner) external payable onlyDev {
         emit OwnershipTransferred(owner, _newOwner);
         owner = _newOwner;
     }
 
-    /*function setSubManager(address _addr, uint256 _validity) external payable onlyOwner {
-        subManager[_addr] = _validity;
-    }*/
-
-    function addDomain(bytes32 _node, string calldata _gateway) external payable onlyOwner {
-        if (bytes(subSpace[_node]._path).length > 0) {
+    function addCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback)
+        external
+        payable
+        onlyDev
+    {
+        if (bytes(devSpace[_node]._gateway).length > 0) {
             revert InvalidRequest("ACTIVE_DOMAIN");
         }
-        subSpace[_node] = Space(true, _gateway);
+        devSpace[_node] = Space(true, _gateway, _fallback);
     }
 
-    function removeDomain(bytes32 _node) external payable onlyOwner {
-        if (!subSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
-        delete subSpace[_node];
+    function removeCoreDomain(bytes32 _node) external payable onlyDev {
+        if (!devSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
+        delete devSpace[_node];
     }
 
-    function addYourENS(bytes32 _node, string calldata _gateway) external payable {
+    function addYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable {
         address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
-        subSpace[_node] = Space(false, _gateway);
+        devSpace[_node] = Space(false, _gateway, _fallback);
     }
 
-    function addYourENS(bytes32 _node, address _signer, string calldata _gateway) external payable {
+    function addYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
+        external
+        payable
+    {
         address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
-        subSpace[_node] = Space(false, _gateway);
-        isApprovedSigner[_manager][_signer] = true;
+        devSpace[_node] = Space(false, _gateway, _fallback);
+        isApprovedSigner[_node][_signer] = true;
     }
 
-    function setYourSigner(bytes32 _node, address _signer, bool _set) external payable {
-        if (bytes(subSpace[_node]._path).length == 0) {
+    function setApprovedSigner(bytes32 _node, address _signer, bool _set) external payable {
+        if (bytes(devSpace[_node]._gateway).length == 0) {
             revert InvalidRequest("NOT_ACTIVE");
         }
         address _manager = ENS.owner(_node);
@@ -302,18 +309,22 @@ contract Dev3 is iERC165, iERC173 {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
-        isApprovedSigner[_manager][_signer] = _set;
+        isApprovedSigner[_node][_signer] = _set;
     }
 
-    function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable onlyOwner{
-        if (!subSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
+    function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable onlyDev {
+        if (!devSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
         address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
-        isApprovedSigner[_manager][_approver] = _set;
+        isApprovedSigner[_node][_approver] = _set;
     }
-    
+
+    function setWrapper(address _wrapper, bool _set) external payable onlyDev {
+        isWrapper[_wrapper] = _set;
+    }
+
     function setChainID() external {
         chainID = (block.chainid).uintToString();
     }
