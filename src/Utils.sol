@@ -3,6 +3,12 @@ pragma solidity >0.8.0 <0.9.0;
 
 import "./Interface.sol";
 
+/**
+ * @title - dev3.eth : Utils
+ * @author - sshmatrix.eth, freetib.eth
+ * @notice - https://dev3.eth.limo
+ * https://github.com/namesys-eth/dev3-eth-resolver
+ */
 library Utils {
     bytes16 internal constant b16 = "0123456789abcdef";
     bytes16 internal constant B16 = "0123456789ABCDEF";

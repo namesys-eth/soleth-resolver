@@ -3,13 +3,13 @@ pragma solidity >0.8.0 <0.9.0;
 
 import "./Interface.sol";
 import "./Utils.sol";
+
 /**
- * @title - Dev3.eth : ENS+Github CCIP Resolver
+ * @title - dev3.eth : ENS-on-Github Resolver implementing CCIP-Read
  * @author - sshmatrix.eth, freetib.eth
  * @notice - https://dev3.eth.limo
  * https://github.com/namesys-eth/dev3-eth-resolver
  */
-
 contract Dev3 is iDev3 {
     using Utils for *;
 
@@ -66,25 +66,25 @@ contract Dev3 is iDev3 {
      */
     function resolve(bytes calldata name, bytes calldata request) external view returns (bytes memory) {
         uint256 level;
-        uint256 ptr;
+        uint256 pointer;
         uint256 len;
         bytes[] memory _labels = new bytes[](43);
         string memory _path;
-        while (name[ptr] > 0x0) {
-            len = uint8(bytes1(name[ptr:++ptr]));
-            _labels[level] = name[ptr:ptr += len];
+        while (name[pointer] > 0x0) {
+            len = uint8(bytes1(name[pointer:++pointer]));
+            _labels[level] = name[pointer:pointer += len];
             _path = string.concat(string(_labels[level++]), "/", _path);
         }
         string[] memory _urls = new string[](2);
         string memory _recordType = jsonFile(request);
         string memory _gateway;
-        ptr = level;
-        bytes32 _nh = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--ptr])));
+        pointer = level;
+        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--pointer])));
         bytes32 _node;
-        while (ptr > 0) {
-            _nh = keccak256(abi.encodePacked(_nh, keccak256(_labels[--ptr])));
-            if (bytes(devSpace[_nh]._gateway).length > 0) {
-                _node = _nh;
+        while (pointer > 0) {
+            _namehash = keccak256(abi.encodePacked(_namehash, keccak256(_labels[--pointer])));
+            if (bytes(devSpace[_namehash]._gateway).length > 0) {
+                _node = _namehash;
             }
         }
         if (_node == 0x0) revert InvalidRequest("INVALID_DOMAIN");

@@ -4,18 +4,13 @@ pragma solidity ^0.8.13;
 import {Test, console2} from "forge-std/Test.sol";
 import "../src/Dev3.sol";
 import "../src/Utils.sol";
-/*
-        //vm.prank(ENS.owner(_node));
-        //ENS.setOwner(_node, _approver);
-        //bytes memory _recordhash =
-        //    hex"e50101720024080112203c5aba6c9b5055a5fa12281c486188ed8ae2b6ef394b3d981b00d17a4b51735c";
-        //vm.prank(_owner);
-        //ccip2eth.setRecordhash(_node, _recordhash);
 
-        //(string memory _path, string memory _domain) = _encoded.Decode();
-        0xaba6b22fbabca37113b02aa409f7e98ef96246cd0f1bd90bd095f763e9be1d12, 0x8fd379246834eac74B8419FfdA202CF8051F7A03
+/**
+ * @title - Test suite for dev3.eth
+ * @author - sshmatrix.eth, freetib.eth
+ * @notice - https://dev3.eth.limo
+ * https://github.com/namesys-eth/dev3-eth-resolver
  */
-
 contract Dev3Test is Test {
     using Utils for *;
     using Helper for *;
@@ -26,7 +21,10 @@ contract Dev3Test is Test {
 
     function setUp() public {}
 
-    function testDomaineth() public {
+    /**
+     * @dev Test case for resolving the domain "domain.eth" using DEV3
+     */
+    function test1_domaineth() public {
         bytes[] memory _name = new bytes[](2);
         _name[0] = "domain";
         _name[1] = "eth";
@@ -71,7 +69,10 @@ contract Dev3Test is Test {
         assertEq(DEV3.__callback(_response, _extradata), _result);
     }
 
-    function testDev3eth() public {
+    /**
+     * @dev Test case for resolving "dev3.eth" using DEV3
+     */
+    function test2_dev3eth() public {
         bytes[] memory _name = new bytes[](2);
         _name[0] = "dev3";
         _name[1] = "eth";
@@ -117,7 +118,10 @@ contract Dev3Test is Test {
         assertEq(DEV3.__callback(_response, _extradata), _result);
     }
 
-    function testSubDev3eth() public {
+    /**
+     * @dev Test case for resolving sub.dev3.eth using DEV3
+     */
+    function test3_subdev3eth() public {
         bytes[] memory _name = new bytes[](3);
         _name[0] = "0xc0de4c0ffee";
         _name[1] = "dev3";
@@ -165,7 +169,10 @@ contract Dev3Test is Test {
         assertEq(DEV3.__callback(_response, _extradata), _result);
     }
 
-    function testApproverSig() public {
+    /**
+     * @dev Test case for verifying approval signature
+     */
+    function test4_approvalSignature() public {
         uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
         uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
         address _approver = vm.addr(ApproverKey);
@@ -197,7 +204,10 @@ contract Dev3Test is Test {
         assertEq(_approver, DEV3.getSigner(_message, _signature));
     }
 
-    function testSignerSig() public {
+    /**
+     * @dev Test case for verifying signer signature
+     */
+    function test5_signerSignature() public {
         uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
         address _signer = vm.addr(SignerKey);
         string memory _gateway = "namesys-eth.github.io";
@@ -233,7 +243,10 @@ contract Dev3Test is Test {
         assertEq(_signer, DEV3.getSigner(_message, _signature));
     }
 
-    function testChecksumAddress() public {
+    /**
+     * @dev Test case for checksum address
+     */
+    function test6_checksumAddress() public {
         assertEq(
             address(0xEa97bb00DaA1880E0A575B38E723066A398595eA).toChecksumAddress(),
             "0xEa97bb00DaA1880E0A575B38E723066A398595eA"
@@ -252,7 +265,10 @@ contract Dev3Test is Test {
         );
     }
 
-    function testBytesToHexString() public {
+    /**
+     * @dev Test case for converting bytes to hex string
+     */
+    function test7_bytesToHexString() public {
         assertEq(
             string("0000000000000000000000000000000000000000000000000000000000000000"),
             (hex"0000000000000000000000000000000000000000000000000000000000000000").bytesToHexString()
@@ -267,7 +283,10 @@ contract Dev3Test is Test {
         );
     }
 
-    function testUintToString() public {
+    /**
+     * @dev Test case for converting uint to string
+     */
+    function test8_uintToString() public {
         assertEq(string("123456789"), 123456789.uintToString());
         assertEq(string("0"), 0.uintToString());
         assertEq(string("11111"), 11111.uintToString());
@@ -282,14 +301,17 @@ contract Dev3Test is Test {
         );
     }
 
-    function testLog10() public {
+    /**
+     * @dev Test case for calculating log10
+     */
+    function test9_log10() public {
         assertEq(1234567890.log10(), 9);
         assertEq(0.log10(), 0);
         assertEq(type(uint256).max.log10(), 77);
     }
 }
-/// @dev Utility functions
 
+/// @dev Utility functions
 interface xENS is iENS {
     function setOwner(bytes32 node, address owner) external;
 }

@@ -15,3 +15,8 @@ out/
 scratch
 node_modules
 worker
+
+# Misc
+.DS_Store
+*/.DS_Store
+*/*/.DS_Store
