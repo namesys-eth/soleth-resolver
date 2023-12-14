@@ -3,6 +3,12 @@ pragma solidity >0.8.0 <0.9.0;
 
 import "./Interface.sol";
 import "./Utils.sol";
+/**
+ * @title - Dev3.eth : ENS+Github CCIP Resolver
+ * @author - sshmatrix.eth, freetib.eth
+ * @notice - https://dev3.eth.limo
+ * https://github.com/namesys-eth/dev3-eth-resolver
+ */
 
 contract Dev3 is iDev3 {
     using Utils for *;
@@ -283,7 +289,6 @@ contract Dev3 is iDev3 {
         emit OwnershipTransferred(owner, _newOwner);
         owner = _newOwner;
     }
-
 
     /**
      * @dev Adds a core domain to the Dev3 contract

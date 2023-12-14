@@ -6,7 +6,7 @@ import "./Interface.sol";
 library Utils {
     bytes16 internal constant b16 = "0123456789abcdef";
     bytes16 internal constant B16 = "0123456789ABCDEF";
-    
+
     /**
      * Convert address to check-summed address string
      * @param _addr - Address

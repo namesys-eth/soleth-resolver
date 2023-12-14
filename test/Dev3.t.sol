@@ -4,32 +4,7 @@ pragma solidity ^0.8.13;
 import {Test, console2} from "forge-std/Test.sol";
 import "../src/Dev3.sol";
 import "../src/Utils.sol";
-
-contract Dev3Test is Test {
-    using Utils for *;
-    using Helper for *;
-
-    Dev3 public DEV3 = new Dev3();
-    xENS public ENS = xENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
-    string public chainID = block.chainid == 1 ? "1" : "5";
-
-    function setUp() public {}
-
-    function testDomain() public {
-        //vm.roll(1234);
-        //vm.warp(12345678);
-        bytes[] memory _name = new bytes[](2);
-        _name[0] = "dev3";
-        _name[1] = "eth";
-        (bytes32 _node, bytes memory _encoded) = Helper.Encode(_name);
-
-        uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
-        //uint256 OwnerKey = 0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd;
-        uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
-        address _approver = vm.addr(ApproverKey);
-        address _signer = vm.addr(SignerKey);
-        bytes32 dev3Node = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
-        dev3Node = keccak256(abi.encodePacked(dev3Node, keccak256("dev3")));
+/*
         //vm.prank(ENS.owner(_node));
         //ENS.setOwner(_node, _approver);
         //bytes memory _recordhash =
@@ -37,10 +12,76 @@ contract Dev3Test is Test {
         //vm.prank(_owner);
         //ccip2eth.setRecordhash(_node, _recordhash);
 
-        (string memory _path, string memory _domain) = _encoded.Decode();
+        //(string memory _path, string memory _domain) = _encoded.Decode();
+ */
+
+contract Dev3Test is Test {
+    using Utils for *;
+    using Helper for *;
+
+    string public chainID = block.chainid == 1 ? "1" : "5";
+    Dev3 public DEV3 = new Dev3();
+    xENS public ENS = xENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
+
+    function setUp() public {}
+
+    function testDomaineth() public {
+        bytes[] memory _name = new bytes[](2);
+        _name[0] = "domain";
+        _name[1] = "eth";
+        (bytes32 _node, bytes memory _encoded) = Helper.Encode(_name);
+        uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+        uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
+        address _approver = vm.addr(ApproverKey);
+        address _signer = vm.addr(SignerKey);
+        vm.prank(ENS.owner(_node));
+        DEV3.addYourENS(_node, _approver, "example.com", "example.xyz");
         bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
         bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
-        string memory _recType = DEV3.jsonFile(_request);
+        bytes32 _callhash = keccak256(_calldata);
+        bytes32 _checkhash = keccak256(abi.encodePacked(address(DEV3), blockhash(block.number - 1), _callhash));
+        string memory _gateway = "example.com";
+        string[] memory _urls = new string[](2);
+        _urls[0] = "https://example.com/.well-known/eth/domain/address/60.json?{data}";
+        _urls[1] = "https://example.xyz/.well-known/eth/domain/address/60.json?{data}=retry";
+        bytes memory _extradata =
+            abi.encode(block.number - 1, _callhash, _checkhash, _node, _gateway, string("address/60"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                iENSIP10.OffchainLookup.selector,
+                address(DEV3),
+                _urls,
+                abi.encodePacked(uint16(block.timestamp / 60)),
+                Dev3.__callback.selector,
+                _extradata
+            )
+        );
+        DEV3.resolve(_encoded, _request);
+        bytes memory _result = abi.encode(address(type(uint160).max));
+        bytes32 _approvalDigest = address(DEV3).GetApprovalDigest(_signer, "example.com", chainID);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ApproverKey, _approvalDigest);
+        bytes memory _approvalSig = abi.encodePacked(r, s, v);
+        bytes32 _signerDigest = address(DEV3).GetRecordDigest(_signer, "example.com", "address/60", _result, chainID);
+        (v, r, s) = vm.sign(SignerKey, _signerDigest);
+        bytes memory _recSig = abi.encodePacked(r, s, v);
+        bytes memory _response =
+            abi.encodeWithSelector(iCallbackType.signedRecord.selector, _signer, _recSig, _approvalSig, _result);
+        assertEq(DEV3.__callback(_response, _extradata), _result);
+    }
+
+    function testDev3eth() public {
+        bytes[] memory _name = new bytes[](2);
+        _name[0] = "dev3";
+        _name[1] = "eth";
+        (bytes32 _node, bytes memory _encoded) = Helper.Encode(_name);
+        uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+        uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
+        address _approver = vm.addr(ApproverKey);
+        address _signer = vm.addr(SignerKey);
+        bytes32 dev3Node = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        dev3Node = keccak256(abi.encodePacked(dev3Node, keccak256("dev3")));
+        bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
+        bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
         bytes32 _callhash = keccak256(_calldata);
         bytes32 _checkhash = keccak256(abi.encodePacked(address(DEV3), blockhash(block.number - 1), _callhash));
         string memory _gateway = "namesys-eth.github.io";
@@ -60,24 +101,21 @@ contract Dev3Test is Test {
             )
         );
         DEV3.resolve(_encoded, _request);
-
         bytes memory _result = abi.encode(address(type(uint160).max));
         bytes32 _approvalDigest = address(DEV3).GetApprovalDigest(_signer, "namesys-eth.github.io", chainID);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ApproverKey, _approvalDigest);
         bytes memory _approvalSig = abi.encodePacked(r, s, v);
-        bytes32 _signerDigest = address(DEV3).GetRecordDigest(_signer, "namesys-eth.github.io", "address/60", _result, chainID);
+        bytes32 _signerDigest =
+            address(DEV3).GetRecordDigest(_signer, "namesys-eth.github.io", "address/60", _result, chainID);
         (v, r, s) = vm.sign(SignerKey, _signerDigest);
         bytes memory _recSig = abi.encodePacked(r, s, v);
         DEV3.setCoreApprover(dev3Node, _approver, true);
         bytes memory _response =
             abi.encodeWithSelector(iCallbackType.signedRecord.selector, _signer, _recSig, _approvalSig, _result);
-
         assertEq(DEV3.__callback(_response, _extradata), _result);
     }
 
-    function testFlow() public {
-        //vm.roll(1234);
-        //vm.warp(12345678);
+    function testSubDev3eth() public {
         bytes[] memory _name = new bytes[](3);
         _name[0] = "0xc0de4c0ffee";
         _name[1] = "dev3";
@@ -87,18 +125,8 @@ contract Dev3Test is Test {
         uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
         address _approver = vm.addr(ApproverKey);
         address _signer = vm.addr(SignerKey);
-
-        //vm.prank(ENS.owner(_node));
-        //ENS.setOwner(_node, _owner);
-        //bytes memory _recordhash =
-        //    hex"e50101720024080112203c5aba6c9b5055a5fa12281c486188ed8ae2b6ef394b3d981b00d17a4b51735c";
-        //vm.prank(_owner);
-        //ccip2eth.setRecordhash(_node, _recordhash);
-
-        (string memory _path, string memory _domain) = _encoded.Decode();
         bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
         bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
-        string memory _recType = DEV3.jsonFile(_request);
         bytes32 _callhash = keccak256(_calldata);
         bytes32 _checkhash = keccak256(abi.encodePacked(address(DEV3), blockhash(block.number - 1), _callhash));
         string memory _gateway = "0xc0de4c0ffee.github.io";
@@ -106,7 +134,6 @@ contract Dev3Test is Test {
         _urls[0] = "https://0xc0de4c0ffee.github.io/.well-known/eth/dev3/0xc0de4c0ffee/address/60.json?{data}";
         _urls[1] =
             "https://raw.githubusercontent.com/0xc0de4c0ffee/0xc0de4c0ffee.github.io/main/.well-known/eth/dev3/0xc0de4c0ffee/address/60.json?{data}";
-
         bytes32 dev3Node = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
         dev3Node = keccak256(abi.encodePacked(dev3Node, keccak256("dev3")));
         bytes memory _extradata =
@@ -126,7 +153,8 @@ contract Dev3Test is Test {
         bytes32 _approvalDigest = address(DEV3).GetApprovalDigest(_signer, "0xc0de4c0ffee.github.io", chainID);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ApproverKey, _approvalDigest);
         bytes memory _approvalSig = abi.encodePacked(r, s, v);
-        bytes32 _signerDigest = address(DEV3).GetRecordDigest(_signer, "0xc0de4c0ffee.github.io", "address/60", _result, chainID);
+        bytes32 _signerDigest =
+            address(DEV3).GetRecordDigest(_signer, "0xc0de4c0ffee.github.io", "address/60", _result, chainID);
         (v, r, s) = vm.sign(SignerKey, _signerDigest);
         bytes memory _recSig = abi.encodePacked(r, s, v);
         DEV3.setCoreApprover(dev3Node, _approver, true);
@@ -174,22 +202,22 @@ contract Dev3Test is Test {
         string memory _recType = "address/60";
         bytes memory _result = abi.encode(address(type(uint160).max));
         string memory _message = string.concat(
-                "Requesting Signature To Update ENS Record\n",
-                "\nGateway: https://",
-                _gateway,
-                "\nResolver: eip155:",
-                chainID,
-                ":",
-                address(this).toChecksumAddress(),
-                "\nRecord Type: ",
-                _recType,
-                "\nExtradata: 0x",
-                abi.encodePacked(keccak256(_result)).bytesToHexString(),
-                "\nSigned By: eip155:",
-                chainID,
-                ":",
-                _signer.toChecksumAddress()
-            );
+            "Requesting Signature To Update ENS Record\n",
+            "\nGateway: https://",
+            _gateway,
+            "\nResolver: eip155:",
+            chainID,
+            ":",
+            address(this).toChecksumAddress(),
+            "\nRecord Type: ",
+            _recType,
+            "\nExtradata: 0x",
+            abi.encodePacked(keccak256(_result)).bytesToHexString(),
+            "\nSigned By: eip155:",
+            chainID,
+            ":",
+            _signer.toChecksumAddress()
+        );
         bytes32 _digest = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n", (bytes(_message).length).uintToString(), _message)
         );
@@ -258,13 +286,12 @@ contract Dev3Test is Test {
         assertEq(type(uint256).max.log10(), 77);
     }
 }
-// Scratch: 0x7a819cebeb5ae713d09ffa208a16e9018d0b272122f86b6c0ab10e3d65a11431
-
 /// @dev Utility functions
+
 interface xENS is iENS {
-    //function setResolver(bytes32 node, address resolver) external;
     function setOwner(bytes32 node, address owner) external;
 }
+
 library Helper {
     using Utils for *;
 
@@ -275,37 +302,34 @@ library Helper {
         string memory _recType,
         bytes memory _result,
         string memory chainID
-    ) public pure returns (bytes32 _digest) {
-        //uint256 SignerKey = _privKey;
-        //address _signer = vm.addr(SignerKey);
+    ) public pure returns (bytes32) {
         string memory _recSig = string.concat(
-                "Requesting Signature To Update ENS Record\n",
-                "\nGateway: https://",
-                _gateway,
-                "\nResolver: eip155:",
-                chainID,
-                ":",
-                address(_resolver).toChecksumAddress(),
-                "\nRecord Type: ",
-                _recType,
-                "\nExtradata: 0x",
-                abi.encodePacked(keccak256(_result)).bytesToHexString(),
-                "\nSigned By: eip155:",
-                chainID,
-                ":",
-                _signer.toChecksumAddress()
-            );
+            "Requesting Signature To Update ENS Record\n",
+            "\nGateway: https://",
+            _gateway,
+            "\nResolver: eip155:",
+            chainID,
+            ":",
+            address(_resolver).toChecksumAddress(),
+            "\nRecord Type: ",
+            _recType,
+            "\nExtradata: 0x",
+            abi.encodePacked(keccak256(_result)).bytesToHexString(),
+            "\nSigned By: eip155:",
+            chainID,
+            ":",
+            _signer.toChecksumAddress()
+        );
 
-        _digest = keccak256(
+        return keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n", (bytes(_recSig).length).uintToString(), _recSig)
         );
-        //(uint8 v, bytes32 r, bytes32 s) = vm.sign(SignerKey, _digest);
-        //return abi.encodePacked(r, s, v);
     }
+
     function GetApprovalDigest(address _resolver, address _signer, string memory _gateway, string memory chainID)
         public
         pure
-        returns (bytes32 _digest)
+        returns (bytes32)
     {
         string memory _message = string.concat(
             "Requesting Signature To Approve ENS Records Signer\n",
@@ -320,7 +344,7 @@ library Helper {
             ":",
             _signer.toChecksumAddress()
         );
-        _digest = keccak256(
+        return keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n", (bytes(_message).length).uintToString(), _message)
         );
     }
