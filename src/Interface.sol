@@ -42,7 +42,9 @@ interface iResolver {
 
     function recordVersions(bytes32 node) external view returns (uint64);
 
-    function approved(bytes32 _node, address _signer) external view returns (bool);
+    function zonehash(bytes32 node) external view returns (bytes memory);
+
+    function dnsRecord(bytes32 node, bytes32 name, uint16 resource) external view returns (bytes memory);
 }
 
 interface iDev3 is iERC165, iERC173, iENSIP10 {
@@ -52,7 +54,10 @@ interface iDev3 is iERC165, iERC173, iENSIP10 {
 
     function transferOwnership(address _newOwner) external payable;
 
-    function addCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
+    function setCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
+    function setCoreDomain(bytes32 _node, address _approver, string calldata _gateway, string calldata _fallback)
+        external
+        payable;
 
     function removeCoreDomain(bytes32 _node) external payable;
 
@@ -77,6 +82,8 @@ interface iDev3 is iERC165, iERC173, iENSIP10 {
 
 interface iOverloadResolver {
     function addr(bytes32 node, uint256 coinType) external view returns (bytes memory);
+
+    function dnsRecord(bytes32 node, bytes memory name, uint16 resource) external view returns (bytes memory);
 }
 
 interface iToken {
