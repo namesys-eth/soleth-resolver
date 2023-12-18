@@ -21,6 +21,11 @@ contract Dev3 is iDev3 {
     error FeatureNotImplemented(bytes4);
 
     string public chainID = block.chainid == 1 ? "1" : "5";
+    event ApprovedSigner(bytes32 indexed _node, address indexed _signer, bool indexed _set);
+    event DomainSetup(bytes32 indexed _node, string _gateway, bool _core);
+    event WrapperUpdate(address indexed _wrapper, bool indexed _set);
+    event FunctionMapUpdate(bytes4 indexed _func, string _name);
+    event ThankYou(address indexed _addr, uint indexed _value);
 
     /**
      * @dev Checks if a given selector is supported by this contract
@@ -56,9 +61,13 @@ contract Dev3 is iDev3 {
         bytes32 _node = keccak256(abi.encodePacked(_root, keccak256("dev3")));
         dev3Space[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
         isApprovedSigner[_node][0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
+        emit DomainSetup(_node, "namesys-eth.github.io", true);
+        emit ApprovedSigner(_node,0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         _node = keccak256(abi.encodePacked(_root, keccak256("isdev")));
         dev3Space[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
         isApprovedSigner[_node][0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
+        emit DomainSetup(_node, "namesys-eth.github.io", true);
+        emit ApprovedSigner(_node,0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
     }
 
@@ -177,11 +186,11 @@ contract Dev3 is iDev3 {
                 ),
                 _approvedSig
             );
-            if (dev3Space[_node]._core && !isApprovedSigner[_node][_approvedBy]) {
-                revert InvalidRequest("BAD_CORE_APPROVAL");
-            } else if (!isApprovedSigner[_node][_approvedBy]) {
-                revert InvalidRequest("BAD_APPROVAL_SIG");
+            if (!isApprovedSigner[_node][_approvedBy]) {
+                revert InvalidSignature("BAD_APPROVAL_SIG");
             }
+        } else if(dev3Space[_node]._core){
+            revert InvalidRequest("BAD_CORE_APPROVER");
         } else if (!isApprovedSigner[_node][_signer]) {
             revert InvalidRequest("BAD_SIGNER");
         }
@@ -312,6 +321,7 @@ contract Dev3 is iDev3 {
         onlyDev
     {
         dev3Space[_node] = Space(true, _gateway, _fallback);
+        emit DomainSetup(_node, _gateway, true);
     }
 
     /**
@@ -328,6 +338,8 @@ contract Dev3 is iDev3 {
     {
         dev3Space[_node] = Space(true, _gateway, _fallback);
         isApprovedSigner[_node][_approver] = true;
+        emit ApprovedSigner(_node, _approver, true);
+        emit DomainSetup(_node, _gateway, true);
     }
 
     /**
@@ -337,6 +349,7 @@ contract Dev3 is iDev3 {
     function removeCoreDomain(bytes32 _node) external payable onlyDev {
         if (!dev3Space[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
         delete dev3Space[_node];
+        emit DomainSetup(_node, "", false);
     }
 
     /**
@@ -345,13 +358,14 @@ contract Dev3 is iDev3 {
      * @param _gateway The gateway associated with the custom domain
      * @param _fallback The fallback associated with the custom domain
      */
-    function addYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable {
+    function updateYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable {
         address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
         dev3Space[_node] = Space(false, _gateway, _fallback);
+        emit DomainSetup(_node, _gateway, false);
     }
 
     /**
@@ -361,7 +375,7 @@ contract Dev3 is iDev3 {
      * @param _gateway The gateway associated with the custom domain
      * @param _fallback The fallback associated with the custom domain
      */
-    function addYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
+    function setupYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
         external
         payable
     {
@@ -372,6 +386,8 @@ contract Dev3 is iDev3 {
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
         dev3Space[_node] = Space(false, _gateway, _fallback);
         isApprovedSigner[_node][_signer] = true;
+        emit ApprovedSigner(_node, _signer, true);
+        emit DomainSetup(_node, _gateway, false);
     }
 
     /**
@@ -390,8 +406,9 @@ contract Dev3 is iDev3 {
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
         isApprovedSigner[_node][_signer] = _set;
+         emit ApprovedSigner(_node, _signer, _set);
     }
-
+    
     /**
      * @dev Sets the core approver for a specific ENS node
      * @param _node The ENS node of the domain
@@ -405,6 +422,7 @@ contract Dev3 is iDev3 {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         isApprovedSigner[_node][_approver] = _set;
+        emit ApprovedSigner(_node, _approver, _set);
     }
 
     /**
@@ -414,15 +432,17 @@ contract Dev3 is iDev3 {
      */
     function setWrapper(address _wrapper, bool _set) external payable onlyDev {
         isWrapper[_wrapper] = _set;
+        emit WrapperUpdate(_wrapper, _set);
     }
 
     /**
      * @dev Sets the function to json filename
      * @param _func Bytes4 Function selector to map
-     * @param _set String mapped to function for json filename
+     * @param _name String mapped to function for json filename
      */
-    function setFunctionMap(bytes4 _func, string calldata _set) external payable onlyDev {
-        funcMap[_func] = _set;
+    function setFunctionMap(bytes4 _func, string calldata _name) external payable onlyDev {
+        funcMap[_func] = _name;
+        emit FunctionMapUpdate(_func, _name);
     }
 
     /**
@@ -453,6 +473,6 @@ contract Dev3 is iDev3 {
     }
 
     receive() external payable {
-        revert();
+        emit ThankYou(msg.sender, msg.value);
     }
 }

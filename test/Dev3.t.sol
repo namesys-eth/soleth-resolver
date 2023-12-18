@@ -100,7 +100,7 @@ contract Dev3Test is Test {
         console2.log(_approver);
         address _signer = vm.addr(SignerKey);
         vm.prank(ENS.owner(_node));
-        DEV3.addYourENS(_node, _approver, "example.com", "example.xyz");
+        DEV3.setupYourENS(_node, _approver, "example.com", "example.xyz");
         bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
         bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
         bytes32 _callhash = keccak256(_calldata);
@@ -153,7 +153,7 @@ contract Dev3Test is Test {
         console2.log(_approver);
         address _signer = vm.addr(SignerKey);
         vm.prank(ENS.owner(_node));
-        DEV3.addYourENS(_node, _approver, "example.com", "example.xyz");
+        DEV3.setupYourENS(_node, _approver, "example.com", "example.xyz");
         bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
         bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
         bytes32 _callhash = keccak256(_calldata);

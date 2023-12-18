@@ -61,9 +61,9 @@ interface iDev3 is iERC165, iERC173, iENSIP10 {
 
     function removeCoreDomain(bytes32 _node) external payable;
 
-    function addYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
+    function updateYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
 
-    function addYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
+    function setupYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
         external
         payable;
 
