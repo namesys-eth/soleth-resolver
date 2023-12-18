@@ -417,10 +417,6 @@ contract Dev3 is iDev3 {
      */
     function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable onlyDev {
         if (!dev3Space[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
-        address _manager = ENS.owner(_node);
-        if (isWrapper[_manager]) {
-            _manager = iToken(_manager).ownerOf(uint256(_node));
-        }
         isApprovedSigner[_node][_approver] = _set;
         emit ApprovedSigner(_node, _approver, _set);
     }
