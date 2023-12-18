@@ -22,6 +22,71 @@ contract Dev3Test is Test {
     function setUp() public {}
 
     /**
+     * @dev Test case for function mapping to json file
+     */
+    function testJsonMap() public {
+        assertEq(DEV3.funcMap(iResolver.contenthash.selector), "contenthash");
+        assertEq(DEV3.funcMap(iResolver.addr.selector), "address/60");
+        assertEq(DEV3.funcMap(iResolver.pubkey.selector), "publickey");
+        assertEq(DEV3.funcMap(iResolver.name.selector), "name");
+        assertEq(DEV3.funcMap(iResolver.recordVersions.selector), "version");
+
+        assertEq(DEV3.jsonFile(abi.encodeWithSelector(iResolver.text.selector, bytes32(0), string("key"))), "text/key");
+        assertEq(
+            DEV3.jsonFile(abi.encodeWithSelector(iOverloadResolver.addr.selector, bytes32(0), uint256(0))), "address/0"
+        );
+        assertEq(
+            DEV3.jsonFile(
+                abi.encodeWithSelector(iResolver.interfaceImplementer.selector, bytes32(0), bytes4(0x12345678))
+            ),
+            "interface/0x12345678"
+        );
+        assertEq(DEV3.jsonFile(abi.encodeWithSelector(iResolver.ABI.selector, bytes32(0), uint256(777))), "abi/777");
+        assertEq(
+            DEV3.jsonFile(abi.encodeWithSelector(iResolver.dnsRecord.selector, bytes32(0), bytes32(0), uint16(1234))),
+            "dns/0x0000000000000000000000000000000000000000000000000000000000000000/1234"
+        );
+        assertEq(
+            DEV3.jsonFile(
+                abi.encodeWithSelector(
+                    iOverloadResolver.dnsRecord.selector, bytes32(0), bytes(hex"ffffffff"), uint16(1234)
+                )
+            ),
+            "dns/0xffffffff/1234"
+        );
+    }
+
+    function testTransferOwner() public {
+        assertEq(DEV3.owner(), address(this));
+        DEV3.transferOwnership(address(0));
+        assertEq(DEV3.owner(), address(0));
+    }
+
+    function testCoreDomain() public {
+        bytes32 _root = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        bytes32 _node = keccak256(abi.encodePacked(_root, keccak256("dev3")));
+        (bool _core, string memory _gateway, string memory _fallback) = DEV3.dev3Space(_node);
+        assertEq(_core, true);
+        assertEq(_gateway, "namesys-eth.github.io");
+        assertEq(_fallback, "dev3.namesys.xyz");
+        _node = keccak256(abi.encodePacked(_root, keccak256("virgil")));
+        (_core, _gateway, _fallback) = DEV3.dev3Space(_node);
+        assertEq(_core, false);
+        assertEq(_gateway, "");
+        assertEq(_fallback, "");
+        DEV3.setCoreDomain(_node, "virgil.ethereum.org", "");
+        (_core, _gateway, _fallback) = DEV3.dev3Space(_node);
+        assertEq(_core, true);
+        assertEq(_gateway, "virgil.ethereum.org");
+        assertEq(_fallback, "");
+        DEV3.removeCoreDomain(_node);
+        (_core, _gateway, _fallback) = DEV3.dev3Space(_node);
+        assertEq(_core, false);
+        assertEq(_gateway, "");
+        assertEq(_fallback, "");
+    }
+
+    /**
      * @dev Test case for resolving the domain "domain.eth" using DEV3
      */
     function test1_domaineth() public {
@@ -35,7 +100,7 @@ contract Dev3Test is Test {
         console2.log(_approver);
         address _signer = vm.addr(SignerKey);
         vm.prank(ENS.owner(_node));
-        DEV3.addYourENS(_node, _approver, "example.com", "example.xyz");
+        DEV3.setupYourENS(_node, _approver, "example.com", "example.xyz");
         bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
         bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
         bytes32 _callhash = keccak256(_calldata);
@@ -44,6 +109,60 @@ contract Dev3Test is Test {
         string[] memory _urls = new string[](2);
         _urls[0] = "https://example.com/.well-known/eth/domain/address/60.json?{data}";
         _urls[1] = "https://example.xyz/.well-known/eth/domain/address/60.json?{data}=retry";
+        bytes memory _extradata =
+            abi.encode(block.number - 1, _callhash, _checkhash, _node, _gateway, string("address/60"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                iENSIP10.OffchainLookup.selector,
+                address(DEV3),
+                _urls,
+                abi.encodePacked(uint16(block.timestamp / 60)),
+                Dev3.__callback.selector,
+                _extradata
+            )
+        );
+        DEV3.resolve(_encoded, _request);
+        bytes memory _result = abi.encode(address(type(uint160).max));
+        bytes32 _approvalDigest = address(DEV3).GetApprovalDigest(_signer, "example.com", chainID);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ApproverKey, _approvalDigest);
+        bytes memory _approvalSig = abi.encodePacked(r, s, v);
+        bytes32 _signerDigest = address(DEV3).GetRecordDigest(_signer, "example.com", "address/60", _result, chainID);
+        (v, r, s) = vm.sign(SignerKey, _signerDigest);
+        bytes memory _recSig = abi.encodePacked(r, s, v);
+        bytes memory _response =
+            abi.encodeWithSelector(iCallbackType.signedRecord.selector, _signer, _recSig, _approvalSig, _result);
+        assertEq(DEV3.__callback(_response, _extradata), _result);
+    }
+    /**
+     * @dev Test case for resolving the deep sub domain "hello.darkness.my.old.friend.domain.eth" using DEV3
+     */
+
+    function testDeepDomaineth() public {
+        bytes[] memory _name = new bytes[](7);
+        _name[0] = "hello";
+        _name[1] = "darkness";
+        _name[2] = "my";
+        _name[3] = "old";
+        _name[4] = "friend";
+        _name[5] = "domain";
+        _name[6] = "eth";
+        (bytes32 _node, bytes memory _encoded) = Helper.Encode(_name);
+        uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+        uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
+        address _approver = vm.addr(ApproverKey);
+        console2.log(_approver);
+        address _signer = vm.addr(SignerKey);
+        vm.prank(ENS.owner(_node));
+        DEV3.setupYourENS(_node, _approver, "example.com", "example.xyz");
+        bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
+        bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
+        bytes32 _callhash = keccak256(_calldata);
+        bytes32 _checkhash = keccak256(abi.encodePacked(address(DEV3), blockhash(block.number - 1), _callhash));
+        string memory _gateway = "example.com";
+        string[] memory _urls = new string[](2);
+        _urls[0] = "https://example.com/.well-known/eth/domain/friend/old/my/darkness/hello/address/60.json?{data}";
+        _urls[1] =
+            "https://example.xyz/.well-known/eth/domain/friend/old/my/darkness/hello/address/60.json?{data}=retry";
         bytes memory _extradata =
             abi.encode(block.number - 1, _callhash, _checkhash, _node, _gateway, string("address/60"));
         vm.expectRevert(
@@ -110,6 +229,63 @@ contract Dev3Test is Test {
         bytes memory _approvalSig = abi.encodePacked(r, s, v);
         bytes32 _signerDigest =
             address(DEV3).GetRecordDigest(_signer, "namesys-eth.github.io", "address/60", _result, chainID);
+        (v, r, s) = vm.sign(SignerKey, _signerDigest);
+        bytes memory _recSig = abi.encodePacked(r, s, v);
+        DEV3.setCoreApprover(dev3Node, _approver, true);
+        bytes memory _response =
+            abi.encodeWithSelector(iCallbackType.signedRecord.selector, _signer, _recSig, _approvalSig, _result);
+        assertEq(DEV3.__callback(_response, _extradata), _result);
+    }
+    /**
+     * @dev Test case for resolving "dev3.eth" using DEV3
+     */
+
+    function testDeepSubDev3eth() public {
+        bytes[] memory _name = new bytes[](8);
+        _name[0] = "hello";
+        _name[1] = "darkness";
+        _name[2] = "my";
+        _name[3] = "old";
+        _name[4] = "friend";
+        _name[5] = "0xc0de4c0ffee";
+        _name[6] = "dev3";
+        _name[7] = "eth";
+        (bytes32 _node, bytes memory _encoded) = Helper.Encode(_name);
+        uint256 ApproverKey = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+        uint256 SignerKey = 0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc;
+        address _approver = vm.addr(ApproverKey);
+        address _signer = vm.addr(SignerKey);
+        bytes memory _request = abi.encodeWithSelector(iResolver.addr.selector, _node);
+        bytes memory _calldata = abi.encodeWithSelector(Dev3.resolve.selector, _encoded, _request);
+        bytes32 _callhash = keccak256(_calldata);
+        bytes32 _checkhash = keccak256(abi.encodePacked(address(DEV3), blockhash(block.number - 1), _callhash));
+        string memory _gateway = "0xc0de4c0ffee.github.io";
+        string[] memory _urls = new string[](2);
+        _urls[0] =
+            "https://0xc0de4c0ffee.github.io/.well-known/eth/dev3/0xc0de4c0ffee/friend/old/my/darkness/hello/address/60.json?{data}";
+        _urls[1] =
+            "https://raw.githubusercontent.com/0xc0de4c0ffee/0xc0de4c0ffee.github.io/main/.well-known/eth/dev3/0xc0de4c0ffee/friend/old/my/darkness/hello/address/60.json?{data}";
+        bytes32 dev3Node = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
+        dev3Node = keccak256(abi.encodePacked(dev3Node, keccak256("dev3")));
+        bytes memory _extradata =
+            abi.encode(block.number - 1, _callhash, _checkhash, dev3Node, _gateway, string("address/60"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                iENSIP10.OffchainLookup.selector,
+                address(DEV3),
+                _urls,
+                abi.encodePacked(uint16(block.timestamp / 60)),
+                Dev3.__callback.selector,
+                _extradata
+            )
+        );
+        DEV3.resolve(_encoded, _request);
+        bytes memory _result = abi.encode(address(type(uint160).max));
+        bytes32 _approvalDigest = address(DEV3).GetApprovalDigest(_signer, "0xc0de4c0ffee.github.io", chainID);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ApproverKey, _approvalDigest);
+        bytes memory _approvalSig = abi.encodePacked(r, s, v);
+        bytes32 _signerDigest =
+            address(DEV3).GetRecordDigest(_signer, "0xc0de4c0ffee.github.io", "address/60", _result, chainID);
         (v, r, s) = vm.sign(SignerKey, _signerDigest);
         bytes memory _recSig = abi.encodePacked(r, s, v);
         DEV3.setCoreApprover(dev3Node, _approver, true);
@@ -263,6 +439,7 @@ contract Dev3Test is Test {
             address(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF).toChecksumAddress(),
             "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF"
         );
+        assertEq(address(0).toChecksumAddress(), "0x0000000000000000000000000000000000000000");
     }
 
     /**
@@ -307,7 +484,7 @@ contract Dev3Test is Test {
     function test9_log10() public {
         assertEq(1234567890.log10(), 9);
         assertEq(0.log10(), 0);
-        assertEq(type(uint256).max.log10(), 77);
+        assertEq((type(uint256).max).log10(), 77);
     }
 }
 

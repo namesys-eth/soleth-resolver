@@ -21,6 +21,11 @@ contract Dev3 is iDev3 {
     error FeatureNotImplemented(bytes4);
 
     string public chainID = block.chainid == 1 ? "1" : "5";
+    event ApprovedSigner(bytes32 indexed _node, address indexed _signer, bool indexed _set);
+    event DomainSetup(bytes32 indexed _node, string _gateway, bool _core);
+    event WrapperUpdate(address indexed _wrapper, bool indexed _set);
+    event FunctionMapUpdate(bytes4 indexed _func, string _name);
+    event ThankYou(address indexed _addr, uint indexed _value);
 
     /**
      * @dev Checks if a given selector is supported by this contract
@@ -31,14 +36,13 @@ contract Dev3 is iDev3 {
         return (_selector == Dev3.resolve.selector || _selector == Dev3.supportsInterface.selector);
     }
 
-    //mapping(address => uint256) public subManager;
     struct Space {
         bool _core;
         string _gateway;
         string _fallback;
     }
 
-    mapping(bytes32 => Space) public devSpace;
+    mapping(bytes32 => Space) public dev3Space;
     mapping(bytes4 => string) public funcMap;
     mapping(bytes32 => mapping(address => bool)) public isApprovedSigner;
     mapping(address => bool) public isWrapper;
@@ -46,15 +50,23 @@ contract Dev3 is iDev3 {
     constructor() {
         owner = msg.sender;
         funcMap[iResolver.addr.selector] = "address/60";
-        funcMap[iResolver.pubkey.selector] = "pubkey";
+        funcMap[iResolver.pubkey.selector] = "publickey";
         funcMap[iResolver.name.selector] = "name"; // NOT used for reverse lookup
         funcMap[iResolver.contenthash.selector] = "contenthash";
+        funcMap[iResolver.zonehash.selector] = "dns/zonehash";
+        funcMap[iResolver.recordVersions.selector] = "version";
 
         bytes32 _root = keccak256(abi.encodePacked(bytes32(0), keccak256("eth")));
         bytes32 _node = keccak256(abi.encodePacked(_root, keccak256("dev3")));
-        devSpace[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
+        dev3Space[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
+        isApprovedSigner[_node][0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
+        emit DomainSetup(_node, "namesys-eth.github.io", true);
+        emit ApprovedSigner(_node,0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         _node = keccak256(abi.encodePacked(_root, keccak256("isdev")));
-        devSpace[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
+        dev3Space[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
+        isApprovedSigner[_node][0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
+        emit DomainSetup(_node, "namesys-eth.github.io", true);
+        emit ApprovedSigner(_node,0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
     }
 
@@ -83,18 +95,18 @@ contract Dev3 is iDev3 {
         bytes32 _node;
         while (pointer > 0) {
             _namehash = keccak256(abi.encodePacked(_namehash, keccak256(_labels[--pointer])));
-            if (bytes(devSpace[_namehash]._gateway).length > 0) {
+            if (bytes(dev3Space[_namehash]._gateway).length > 0) {
                 _node = _namehash;
             }
         }
         if (_node == 0x0) revert InvalidRequest("INVALID_DOMAIN");
-        if (!devSpace[_node]._core || level == 2) {
-            _gateway = devSpace[_node]._gateway;
+        if (!dev3Space[_node]._core || level == 2) {
+            _gateway = dev3Space[_node]._gateway;
             _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
-            _urls[1] = bytes(devSpace[_node]._fallback).length == 0
+            _urls[1] = bytes(dev3Space[_node]._fallback).length == 0
                 ? string.concat(_urls[0], "=retry")
                 : string.concat(
-                    "https://", devSpace[_node]._fallback, "/.well-known/", _path, _recordType, ".json?{data}=retry"
+                    "https://", dev3Space[_node]._fallback, "/.well-known/", _path, _recordType, ".json?{data}=retry"
                 );
         } else {
             _gateway = string.concat(string(_labels[level - 3]), ".github.io");
@@ -123,7 +135,7 @@ contract Dev3 is iDev3 {
     }
 
     /**
-     * @dev Callback function called by ENSIP10 resolver to handle off-chain lookup
+     * @dev Callback function called by ENSIP-10 resolver to handle off-chain lookup
      * @param response The response from the off-chain lookup
      * @param extradata Extra data for processing the off-chain lookup response
      * @return result The result of the off-chain lookup
@@ -173,11 +185,11 @@ contract Dev3 is iDev3 {
                 ),
                 _approvedSig
             );
-            if (devSpace[_node]._core && !isApprovedSigner[_node][_approvedBy]) {
-                revert InvalidRequest("BAD_CORE_APPROVAL");
-            } else if (!isApprovedSigner[_node][_approvedBy]) {
-                revert InvalidRequest("BAD_APPROVAL_SIG");
+            if (!isApprovedSigner[_node][_approvedBy]) {
+                revert InvalidSignature("BAD_APPROVAL_SIG");
             }
+        } else if(dev3Space[_node]._core){
+            revert InvalidRequest("BAD_CORE_APPROVER");
         } else if (!isApprovedSigner[_node][_signer]) {
             revert InvalidRequest("BAD_SIGNER");
         }
@@ -228,6 +240,12 @@ contract Dev3 is iDev3 {
         } else if (func == iResolver.ABI.selector) {
             (, uint256 _abi) = abi.decode(_request[4:], (bytes32, uint256));
             return string.concat("abi/", _abi.uintToString());
+        } else if (func == iOverloadResolver.dnsRecord.selector) {
+            (, bytes memory _name, uint16 resource) = abi.decode(_request[4:], (bytes32, bytes, uint16));
+            return string.concat("dns/0x", _name.bytesToHexString(), "/", resource.uintToString());
+        } else if (func == iResolver.dnsRecord.selector) {
+            (, bytes32 _name, uint16 resource) = abi.decode(_request[4:], (bytes32, bytes32, uint16));
+            return string.concat("dns/0x", abi.encodePacked(_name).bytesToHexString(), "/", resource.uintToString());
         }
         revert FeatureNotImplemented(func);
     }
@@ -277,7 +295,7 @@ contract Dev3 is iDev3 {
      * @dev Modifier to restrict access to only the owner of the contract
      */
     modifier onlyDev() {
-        if (msg.sender != owner) revert InvalidRequest("ONLY_OWNER");
+        if (msg.sender != owner) revert InvalidRequest("ONLY_DEV");
         _;
     }
 
@@ -296,15 +314,31 @@ contract Dev3 is iDev3 {
      * @param _gateway The gateway associated with the core domain
      * @param _fallback The fallback associated with the core domain
      */
-    function addCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback)
+    function setCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback)
         external
         payable
         onlyDev
     {
-        if (bytes(devSpace[_node]._gateway).length > 0) {
-            revert InvalidRequest("ACTIVE_DOMAIN");
-        }
-        devSpace[_node] = Space(true, _gateway, _fallback);
+        dev3Space[_node] = Space(true, _gateway, _fallback);
+        emit DomainSetup(_node, _gateway, true);
+    }
+
+    /**
+     * @dev Adds a core domain to the Dev3 contract
+     * @param _node The ENS node of the core domain
+     * @param _approver The approved signer for the core domain
+     * @param _gateway The gateway associated with the core domain
+     * @param _fallback The fallback associated with the core domain
+     */
+    function setCoreDomain(bytes32 _node, address _approver, string calldata _gateway, string calldata _fallback)
+        external
+        payable
+        onlyDev
+    {
+        dev3Space[_node] = Space(true, _gateway, _fallback);
+        isApprovedSigner[_node][_approver] = true;
+        emit ApprovedSigner(_node, _approver, true);
+        emit DomainSetup(_node, _gateway, true);
     }
 
     /**
@@ -312,8 +346,9 @@ contract Dev3 is iDev3 {
      * @param _node The ENS node of the core domain
      */
     function removeCoreDomain(bytes32 _node) external payable onlyDev {
-        if (!devSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
-        delete devSpace[_node];
+        if (!dev3Space[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
+        delete dev3Space[_node];
+        emit DomainSetup(_node, "", false);
     }
 
     /**
@@ -322,13 +357,14 @@ contract Dev3 is iDev3 {
      * @param _gateway The gateway associated with the custom domain
      * @param _fallback The fallback associated with the custom domain
      */
-    function addYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable {
+    function updateYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable {
         address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
-        devSpace[_node] = Space(false, _gateway, _fallback);
+        dev3Space[_node] = Space(false, _gateway, _fallback);
+        emit DomainSetup(_node, _gateway, false);
     }
 
     /**
@@ -338,7 +374,7 @@ contract Dev3 is iDev3 {
      * @param _gateway The gateway associated with the custom domain
      * @param _fallback The fallback associated with the custom domain
      */
-    function addYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
+    function setupYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
         external
         payable
     {
@@ -347,8 +383,10 @@ contract Dev3 is iDev3 {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
-        devSpace[_node] = Space(false, _gateway, _fallback);
+        dev3Space[_node] = Space(false, _gateway, _fallback);
         isApprovedSigner[_node][_signer] = true;
+        emit ApprovedSigner(_node, _signer, true);
+        emit DomainSetup(_node, _gateway, false);
     }
 
     /**
@@ -358,7 +396,7 @@ contract Dev3 is iDev3 {
      * @param _set The approval status (true/false)
      */
     function setApprovedSigner(bytes32 _node, address _signer, bool _set) external payable {
-        if (bytes(devSpace[_node]._gateway).length == 0) {
+        if (bytes(dev3Space[_node]._gateway).length == 0) {
             revert InvalidRequest("NOT_ACTIVE");
         }
         address _manager = ENS.owner(_node);
@@ -367,8 +405,9 @@ contract Dev3 is iDev3 {
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
         isApprovedSigner[_node][_signer] = _set;
+         emit ApprovedSigner(_node, _signer, _set);
     }
-
+    
     /**
      * @dev Sets the core approver for a specific ENS node
      * @param _node The ENS node of the domain
@@ -376,12 +415,13 @@ contract Dev3 is iDev3 {
      * @param _set The approval status (true/false)
      */
     function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable onlyDev {
-        if (!devSpace[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
+        if (!dev3Space[_node]._core) revert InvalidRequest("NOT_CORE_DOMAIN");
         address _manager = ENS.owner(_node);
         if (isWrapper[_manager]) {
             _manager = iToken(_manager).ownerOf(uint256(_node));
         }
         isApprovedSigner[_node][_approver] = _set;
+        emit ApprovedSigner(_node, _approver, _set);
     }
 
     /**
@@ -391,6 +431,17 @@ contract Dev3 is iDev3 {
      */
     function setWrapper(address _wrapper, bool _set) external payable onlyDev {
         isWrapper[_wrapper] = _set;
+        emit WrapperUpdate(_wrapper, _set);
+    }
+
+    /**
+     * @dev Sets the function to JSON filename
+     * @param _func bytes4 function selector to map
+     * @param _name String mapped to function for JSON filename
+     */
+    function setFunctionMap(bytes4 _func, string calldata _name) external payable onlyDev {
+        funcMap[_func] = _name;
+        emit FunctionMapUpdate(_func, _name);
     }
 
     /**
@@ -421,6 +472,6 @@ contract Dev3 is iDev3 {
     }
 
     receive() external payable {
-        revert();
+        emit ThankYou(msg.sender, msg.value);
     }
 }
