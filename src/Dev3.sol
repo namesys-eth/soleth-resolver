@@ -5,7 +5,7 @@ import "./Interface.sol";
 import "./Utils.sol";
 
 /**
- * @title - dev3.eth : ENS-on-Github Resolver implementing CCIP-Read
+ * @title - dev3.eth : ENS-on-Github Resolver implementing CCIP-Read & Wildcard Resolution
  * @author - sshmatrix.eth, freetib.eth
  * @notice - https://dev3.eth.limo
  * https://github.com/namesys-eth/dev3-eth-resolver
