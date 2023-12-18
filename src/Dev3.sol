@@ -320,6 +320,9 @@ contract Dev3 is iDev3 {
         payable
         onlyDev
     {
+        if (bytes(dev3Space[_node]._gateway).length > 0) {
+            revert InvalidRequest("ACTIVE_DOMAIN");
+        }
         dev3Space[_node] = Space(true, _gateway, _fallback);
         emit DomainSetup(_node, _gateway, true);
     }
@@ -336,6 +339,9 @@ contract Dev3 is iDev3 {
         payable
         onlyDev
     {
+        if (bytes(dev3Space[_node]._gateway).length > 0) {
+            revert InvalidRequest("ACTIVE_DOMAIN");
+        }
         dev3Space[_node] = Space(true, _gateway, _fallback);
         isApprovedSigner[_node][_approver] = true;
         emit ApprovedSigner(_node, _approver, true);
