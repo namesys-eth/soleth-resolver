@@ -21,11 +21,12 @@ contract Dev3 is iDev3 {
     error FeatureNotImplemented(bytes4);
 
     string public chainID = block.chainid == 1 ? "1" : "5";
+
     event ApprovedSigner(bytes32 indexed _node, address indexed _signer, bool indexed _set);
     event DomainSetup(bytes32 indexed _node, string _gateway, bool _core);
     event WrapperUpdate(address indexed _wrapper, bool indexed _set);
     event FunctionMapUpdate(bytes4 indexed _func, string _name);
-    event ThankYou(address indexed _addr, uint indexed _value);
+    event ThankYou(address indexed _addr, uint256 indexed _value);
 
     /**
      * @dev Checks if a given selector is supported by this contract
@@ -61,12 +62,12 @@ contract Dev3 is iDev3 {
         dev3Space[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
         isApprovedSigner[_node][0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
         emit DomainSetup(_node, "namesys-eth.github.io", true);
-        emit ApprovedSigner(_node,0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
+        emit ApprovedSigner(_node, 0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         _node = keccak256(abi.encodePacked(_root, keccak256("isdev")));
         dev3Space[_node] = Space(true, "namesys-eth.github.io", "dev3.namesys.xyz");
         isApprovedSigner[_node][0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
         emit DomainSetup(_node, "namesys-eth.github.io", true);
-        emit ApprovedSigner(_node,0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
+        emit ApprovedSigner(_node, 0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
     }
 
@@ -188,7 +189,7 @@ contract Dev3 is iDev3 {
             if (!isApprovedSigner[_node][_approvedBy]) {
                 revert InvalidSignature("BAD_APPROVAL_SIG");
             }
-        } else if(dev3Space[_node]._core){
+        } else if (dev3Space[_node]._core) {
             revert InvalidRequest("BAD_CORE_APPROVER");
         } else if (!isApprovedSigner[_node][_signer]) {
             revert InvalidRequest("BAD_SIGNER");
@@ -405,9 +406,9 @@ contract Dev3 is iDev3 {
         }
         if (msg.sender != _manager) revert InvalidRequest("ONLY_MANAGER");
         isApprovedSigner[_node][_signer] = _set;
-         emit ApprovedSigner(_node, _signer, _set);
+        emit ApprovedSigner(_node, _signer, _set);
     }
-    
+
     /**
      * @dev Sets the core approver for a specific ENS node
      * @param _node The ENS node of the domain
