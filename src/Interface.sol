@@ -15,6 +15,8 @@ interface iERC173 {
 
 interface iENS {
     function owner(bytes32 node) external view returns (address);
+
+    function resolver(bytes32 node) external view returns (address);
 }
 
 interface iENSIP10 {
@@ -55,6 +57,7 @@ interface iDev3 is iERC165, iERC173, iENSIP10 {
     function transferOwnership(address _newOwner) external payable;
 
     function setCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
+
     function setCoreDomain(bytes32 _node, address _approver, string calldata _gateway, string calldata _fallback)
         external
         payable;

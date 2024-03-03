@@ -54,11 +54,32 @@ library Utils {
             return string(result);
         }
     }
+    /**
+     * @dev Converts a hexadecimal string input to a bytes array output.
+     * @param input - hex value to convert to bytes
+     */
 
+    function hexStringToBytes(bytes memory input) public pure returns (bytes memory output) {
+        require(input.length % 2 == 0, "BAD_LENGTH");
+        uint8 a;
+        uint8 b;
+        uint256 c;
+        unchecked {
+            uint256 len = input.length / 2;
+            output = new bytes(len);
+            while (c < len) {
+                b = uint8(input[2 * c]) - 48;
+                a = (b < 10) ? b : b - 39;
+                b = uint8(input[2 * c + 1]) - 48;
+                output[c++] = bytes1((a * 16) + ((b < 10) ? b : b - 39));
+            }
+        }
+    }
     /**
      * Convert uint to string format
      * @param _input - Uint Numbers to convert
      */
+
     function uintToString(uint256 _input) internal pure returns (string memory) {
         if (_input == 0) {
             return "0";
