@@ -2,7 +2,7 @@
 pragma solidity >0.8.0 <0.9.0;
 
 import "forge-std/Script.sol";
-import "src/Dev3.sol";
+import "src/SolanaNameResolver.sol";
 
 /**
  * @title - dev3.eth : Deployer
@@ -10,10 +10,10 @@ import "src/Dev3.sol";
  * @notice - https://dev3.eth.limo
  * https://github.com/namesys-eth/dev3-eth-resolver
  */
-contract Dev3Deploy is Script {
+contract SolanaNameResolverDeploy is Script {
     function run() external {
         vm.startBroadcast();
-        new Dev3();
+        new SolanaNameResolver();
         vm.stopBroadcast();
     }
 }

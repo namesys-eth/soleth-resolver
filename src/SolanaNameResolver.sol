@@ -10,15 +10,15 @@ import "./Utils.sol";
  * @notice - https://dev3.eth.limo
  * https://github.com/namesys-eth/dev3-eth-resolver
  */
-contract Dev3 is iDev3 {
+contract SolanaNameResolver is iSNR {
     using Utils for *;
 
     address public owner;
-    iENS public immutable ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
+    iENS public constant ENS = iENS(0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e);
 
     error InvalidRequest(string);
     error InvalidSignature(string);
-    error FeatureNotImplemented(bytes4);
+    error NotImplemented(bytes4);
 
     string public PrimaryGateway = "sol.casa";
     string public FallbackGateway = "fallback.sol.casa";
@@ -30,35 +30,60 @@ contract Dev3 is iDev3 {
     event FunctionMapUpdate(bytes4 indexed _func, string _name);
     event ThankYou(address indexed _addr, uint256 indexed _value);
 
-    /**
-     * @dev Checks if a given selector is supported by this contract
-     * @param _selector The selector to check
-     * @return true if the selector is supported, false otherwise
-     */
-    function supportsInterface(bytes4 _selector) external pure returns (bool) {
-        return (_selector == Dev3.resolve.selector || _selector == Dev3.supportsInterface.selector);
-    }
+    //function supportsInterface(bytes4 _selector) external view returns (bool) {
+    //    return bytes(funcMap[_selector]).length > 0;
+    //return (_selector == iResolveWithContext.resolve.selector || _selector == iENSIP10.resolve.selector || _selector == iERC165.supportsInterface.selector);
+    //}
 
-    struct Space {
-        bool _core;
-        string _gateway;
-        string _fallback;
-    }
-
-    //mapping(bytes32 => Space) public dev3Space;
     mapping(address => bool) public gatewaySigner;
     mapping(bytes4 => string) public funcMap;
-    //mapping(bytes32 => mapping(address => bool)) public isApprovedSigner;
+    mapping(bytes4 => bool) public supportsInterface;
     mapping(address => bool) public isWrapper;
+    mapping(uint256 => string) public coinToSymbol;
+
+    struct Gateway {
+        string domain;
+        address signer;
+    }
+
+    Gateway[] public Gateways;
+
+    function listGateways() external view returns (Gateway[] memory gateways) {
+        uint256 len = Gateways.length;
+        gateways = new Gateway[](len);
+        for (uint256 i; i < len; i++) {
+            gateways[i] = Gateways[i];
+        }
+    }
+
+    function randomGateways(string memory _fullPath) public view returns (string[] memory urls) {
+        uint256 total = Gateways.length;
+        uint256 len = (total / 2) + 1;
+        urls = new string[](len);
+        bytes32 seed = keccak256(abi.encodePacked(blockhash(block.number - 1), _fullPath));
+        uint256 _index = 42;
+        for (uint256 i = 0; i < len;) {
+            seed = keccak256(abi.encodePacked(seed, i, _index));
+            if (uint256(seed) % total != _index) {
+                _index = uint256(seed) % total;
+                urls[i] = string.concat("https://", Gateways[_index].domain, _fullPath);
+                i++;
+            }
+        }
+    }
+
+    string public THIS;
 
     constructor() {
+        THIS = address(this).toChecksumAddress();
         owner = msg.sender;
         funcMap[iResolver.addr.selector] = "address/eth";
         funcMap[iResolver.pubkey.selector] = "publickey";
         funcMap[iResolver.name.selector] = "name"; // NOT used for reverse lookup
         funcMap[iResolver.contenthash.selector] = "contenthash";
-        funcMap[iResolver.zonehash.selector] = "dns/zonehash"; // ? linkup cname/A??
-        funcMap[iResolver.recordVersions.selector] = "version"; // ? not used
+        //funcMap[iResolver.zonehash.selector] = "dns_zonehash"; // ? linkup cname/A??
+        //funcMap[iResolver.recordVersions.selector] = "version"; // ? not used
+
         gatewaySigner[0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35] = true;
         emit GatewaySigner(0xae9Cc8813ab095cD38F3a8d09Aecd66b2B2a2d35, true);
         isWrapper[0xD4416b13d2b3a9aBae7AcD5D6C2BbDBE25686401] = true;
@@ -71,29 +96,31 @@ contract Dev3 is iDev3 {
      * @return result The resolved record
      */
     function resolve(bytes calldata name, bytes calldata request) public view returns (bytes memory) {
-        uint256 level;
-        uint256 pointer;
-        uint256 len;
-        bytes[] memory _labels = new bytes[](43);
-        string memory _path;
+        uint256 level = 1;
+        uint256 pointer = 1;
+        uint256 len = uint8(bytes1(name[0]));
+        bytes[] memory labels = new bytes[](43);
+        labels[0] = name[1:pointer += len];
+        string memory _path = string(labels[0]);
+        string memory _domain = _path;
         while (name[pointer] > 0x0) {
             len = uint8(bytes1(name[pointer:++pointer]));
-            _labels[level] = name[pointer:pointer += len];
-            _path = string.concat(string(_labels[level++]), "/", _path);
+            labels[level] = name[pointer:pointer += len];
+            _domain = string.concat(_domain, ".", string(labels[level]));
+            _path = string.concat(string(labels[level++]), "/", _path);
         }
-        string memory _recordType = jsonFile(request);
-        pointer = level;
-        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256(_labels[--pointer])));
+        //pointer = level;
+        bytes32 _namehash = keccak256(abi.encodePacked(bytes32(0), keccak256(labels[--level])));
         bytes32 _node;
-        while (pointer > 0) {
-            _namehash = keccak256(abi.encodePacked(_namehash, keccak256(_labels[--pointer])));
+        while (level > 0) {
+            _namehash = keccak256(abi.encodePacked(_namehash, keccak256(labels[--level])));
             if (ENS.resolver(_namehash) == address(this)) {
                 _node = _namehash;
             }
         }
-        string[] memory _urls = new string[](2);
-        _urls[0] = string.concat("https://", PrimaryGateway, "/.well-known/", _path, _recordType, ".json?{data}");
-        _urls[1] = string.concat("https://", FallbackGateway, "/.well-known/", _path, _recordType, ".json?{data}");
+        //require(_namehash == bytes32(request[4:36]), "BAD_REQUEST");
+        string memory _recordType = jsonFile(request);
+        string[] memory _urls = randomGateways(string.concat("/.well-known/", _path, _recordType, ".json?t={data}"));
         bytes32 _callhash = keccak256(request);
         uint256 _blockNum = block.number - 1;
         bytes32 _checkhash = keccak256(abi.encodePacked(this, blockhash(_blockNum), _callhash));
@@ -102,51 +129,7 @@ contract Dev3 is iDev3 {
             _urls,
             abi.encodePacked(uint16(block.timestamp / 300)),
             iENSIP10.__callback.selector,
-            abi.encode(_blockNum, _callhash, _checkhash, _node, PrimaryGateway, _recordType)
-        );
-    }
-
-    /**
-     * @dev Resolves a given DNS name and returns the corresponding record (ENSIP-10)
-     * @param name DNS-encoded subdomain or domain.eth
-     * @param request ENS Resolver request
-     * @param ctx context
-     * @return result The resolved record
-     */
-    function resolve(bytes calldata name, bytes calldata request, bytes calldata ctx)
-        public
-        view
-        returns (bytes memory)
-    {
-        if (ctx.length == 0) {
-            return resolve(name, request);
-        }
-        bytes memory _data = ctx.hexStringToBytes();
-        (address _signer, string memory _gateway, string memory _fallback) = abi.decode(_data, (address, string, string));
-        uint256 level;
-        uint256 pointer;
-        uint256 len;
-        bytes[] memory _labels = new bytes[](43);
-        string memory _path;
-        while (name[pointer] > 0x0) {
-            len = uint8(bytes1(name[pointer:++pointer]));
-            _labels[level] = name[pointer:pointer += len];
-            _path = string.concat(string(_labels[level++]), "/", _path);
-        }
-        string memory _recordType = jsonFile(request);
-        bytes32 _node = bytes32(uint256(uint160(_signer)));
-        string[] memory _urls = new string[](2);
-        _urls[0] = string.concat("https://", _gateway, "/.well-known/", _path, _recordType, ".json?{data}");
-        _urls[1] = string.concat("https://", _fallback, "/.well-known/", _path, _recordType, ".json?{data}");
-        bytes32 _callhash = keccak256(request);
-        uint256 _blockNum = block.number - 1;
-        bytes32 _checkhash = keccak256(abi.encodePacked(this, blockhash(_blockNum), _callhash));
-        revert OffchainLookup(
-            address(this),
-            _urls,
-            abi.encodePacked(uint16(block.timestamp / 60)),
-            iENSIP10.__callback.selector,
-            abi.encode(_blockNum, _callhash, _checkhash, _node, _gateway, _recordType)
+            abi.encode(_blockNum, _callhash, _checkhash, _node, _domain, _recordType)
         );
     }
 
@@ -166,7 +149,7 @@ contract Dev3 is iDev3 {
             bytes32 _callhash,
             bytes32 _checkhash,
             bytes32 _node,
-            string memory _gateway,
+            string memory _domain,
             string memory _recType
         ) = abi.decode(extradata, (uint256, bytes32, bytes32, bytes32, string, string));
         if (block.number > _blocknumber + 3) {
@@ -178,55 +161,71 @@ contract Dev3 is iDev3 {
         if (bytes4(response[:4]) != iCallbackType.signedRecord.selector) {
             revert InvalidRequest("BAD_RECORD_PREFIX");
         }
-        (address _signer, bytes memory _recordSig, bytes memory _approvedSig, bytes memory _result) =
-            abi.decode(response[4:], (address, bytes, bytes, bytes));
-        address _manager;
-        if(_node > 0x0 && _node < type(bytes20).max){
-            _manager = ENS.owner(_node);
+        (bytes memory _result, bytes[] memory _recordSigs, bytes memory _extradata) =
+            abi.decode(response[4:], (bytes, bytes[], bytes));
+        string memory message;
+        bytes32 digest;
+        if (_node != 0x0) {
+            address _manager = ENS.owner(_node);
             if (isWrapper[_manager]) {
                 _manager = iToken(_manager).ownerOf(uint256(_node));
             }
-        } else {
-            _manager = uint160(uint256(_node));
-        }
-        if (_approvedSig.length > 63) {
-            address _approvedBy = Dev3(this).getSigner(
-                string.concat(
-                    "Requesting Signature To Approve ENS Records Signer\n",
-                    "\nGateway: https://",
-                    _gateway,
-                    "\nResolver: eip155:1:",
-                    address(this).toChecksumAddress(),
-                    "\nApproved Signer: eip155:1:",
-                    _signer.toChecksumAddress()
-                ),
-                _approvedSig
+            string memory solanaName;
+            bytes memory _approvedSig;
+            (_extradata, _approvedSig, solanaName) = abi.decode(_extradata, (bytes, bytes, string));
+            if (_approvedSig.length < 64) {
+                revert InvalidRequest("BAD_LINK_SIG");
+            }
+            message = string.concat(
+                "Requesting Signature To Read ENS Records From SNS\n",
+                "\nENS Domain: ",
+                _domain,
+                "\nSNS Domain: ",
+                solanaName,
+                "\nResolver: eip155:1:",
+                THIS
             );
+            digest = keccak256(
+                abi.encodePacked("\x19Ethereum Signed Message:\n", (bytes(message).length).uintToString(), message)
+            );
+            address _approvedBy = SolanaNameResolver(this).getSigner(digest, _approvedSig);
             if (_manager != _approvedBy) {
                 revert InvalidSignature("BAD_APPROVAL_SIG");
             }
         }
-        if (!gatewaySigner[_signer]) {
-            revert InvalidRequest("BAD_SIGNER");
-        }
-        address _signedBy = Dev3(this).getSigner(
-            string.concat(
-                "Requesting Signature To Update ENS Record\n",
-                "\nGateway: https://",
-                _gateway,
-                "\nResolver: eip155:1:",
-                address(this).toChecksumAddress(),
-                "\nRecord Type: ",
-                _recType,
-                "\nExtradata: 0x",
-                abi.encodePacked(keccak256(_result)).bytesToHexString(),
-                "\nSigned By: eip155:1:",
-                _signer.toChecksumAddress()
-            ),
-            _recordSig
+        message = string.concat(
+            "Requesting Signature For ENS Record\n",
+            "\nDomain: ",
+            _domain,
+            "\nResolver: eip155:1:",
+            THIS,
+            "\nRecord Type: ",
+            _recType,
+            "\nResult Hash: 0x",
+            abi.encodePacked(keccak256(_result)).bytesToHexString()
         );
-        if (_signer != _signedBy) {
-            revert InvalidRequest("BAD_SIGNED_RECORD");
+        digest = keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n", (bytes(message).length).uintToString(), message)
+        );
+        uint256 len = _recordSigs.length;
+        if (len < (Gateways.length / 2) + 1) {
+            // TODO : Set Limit
+            revert InvalidRequest("NOT_ENOUGH_GATEWAY_SIGS");
+        }
+        address[] memory signers = new address[](len);
+        for (uint256 i = 0; i < len; i++) {
+            address _signer = SolanaNameResolver(this).getSigner(digest, _recordSigs[i]);
+            if (!gatewaySigner[_signer]) {
+                revert InvalidSignature("BAD_RECORD_SIG");
+            }
+            signers[i] = _signer;
+        }
+        for (uint256 j = 0; j < len; j++) {
+            for (uint256 k = j+1; k < len; k++) {
+                if(signers[j] == signers[k]){
+                    revert InvalidRequest("DUPLICATE_GATEWAY_SIGNER");
+                }
+            }
         }
         return _result;
     }
@@ -242,29 +241,30 @@ contract Dev3 is iDev3 {
             return funcMap[func];
         } else if (func == iResolver.text.selector) {
             (, string memory _key) = abi.decode(_request[4:], (bytes32, string));
-            return string.concat("text/", _key);
+            return string.concat("text_", _key);
         } else if (func == iOverloadResolver.addr.selector) {
             (, uint256 _coinType) = abi.decode(_request[4:], (bytes32, uint256));
-            return string.concat("address/", _coinType.uintToString());
-        } else if (func == iResolver.interfaceImplementer.selector) {
+            return string.concat("addr_", _coinType.uintToString());
+        }
+        /* else if (func == iResolver.interfaceImplementer.selector) {
             (, bytes4 _interface) = abi.decode(_request[4:], (bytes32, bytes4));
-            return string.concat("interface/0x", abi.encodePacked(_interface).bytesToHexString());
+            return string.concat("interface_0x", abi.encodePacked(_interface).bytesToHexString());
         } else if (func == iResolver.ABI.selector) {
             (, uint256 _abi) = abi.decode(_request[4:], (bytes32, uint256));
-            return string.concat("abi/", _abi.uintToString());
+            return string.concat("abi_", _abi.uintToString());
         } else if (func == iOverloadResolver.dnsRecord.selector) {
             (, bytes memory _name, uint16 resource) = abi.decode(_request[4:], (bytes32, bytes, uint16));
-            return string.concat("dns/0x", _name.bytesToHexString(), "/", resource.uintToString());
+            return string.concat("dns_0x", _name.bytesToHexString(), "_", resource.uintToString());
         } else if (func == iResolver.dnsRecord.selector) {
             (, bytes32 _name, uint16 resource) = abi.decode(_request[4:], (bytes32, bytes32, uint16));
-            return string.concat("dns/0x", abi.encodePacked(_name).bytesToHexString(), "/", resource.uintToString());
-        }
-        revert FeatureNotImplemented(func);
+            return string.concat("dns_0x", abi.encodePacked(_name).bytesToHexString(), "_", resource.uintToString());
+        }*/
+        revert NotImplemented(func);
     }
 
     /**
      * @dev Checks if a signature is valid
-     * @param _message - String-formatted message that was signed
+     * @param digest - String-formatted message that was signed
      * @param _signature - Compact signature to verify
      * @return _signer - Signer of message
      * @notice - Signature Format:
@@ -272,7 +272,7 @@ contract Dev3 is iDev3 {
      * b) 65 bytes - bytes32(r) + bytes32(s) + uint8(v) ~ packed, or
      * c) 96 bytes - bytes32(r) + bytes32(s) + uint256(v) ~ longest
      */
-    function getSigner(string calldata _message, bytes calldata _signature) external pure returns (address _signer) {
+    function getSigner(bytes32 digest, bytes calldata _signature) external pure returns (address _signer) {
         bytes32 r = bytes32(_signature[:32]);
         bytes32 s;
         uint8 v;
@@ -293,9 +293,6 @@ contract Dev3 is iDev3 {
         if (s > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             revert InvalidSignature("INVALID_S_VALUE");
         }
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n", (bytes(_message).length).uintToString(), _message)
-        );
         _signer = ecrecover(digest, v, r, s);
         if (_signer == address(0)) {
             revert InvalidSignature("ZERO_ADDR");
@@ -312,7 +309,7 @@ contract Dev3 is iDev3 {
     }
 
     /**
-     * @dev Transfers ownership of the Dev3 contract to a new owner
+     * @dev Transfers ownership of the SolanaNameResolver contract to a new owner
      * @param _newOwner The address of the new owner
      */
     function transferOwnership(address _newOwner) external payable onlyDev {

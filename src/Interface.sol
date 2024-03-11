@@ -27,6 +27,12 @@ interface iENSIP10 {
     function __callback(bytes calldata res, bytes calldata data) external view returns (bytes memory result);
 }
 
+interface iResolveWithContext {
+    function resolve(bytes calldata name, bytes calldata request, bytes calldata ctx)
+        external
+        returns (bytes memory result);
+}
+
 interface iResolver {
     function contenthash(bytes32 node) external view returns (bytes memory);
 
@@ -49,34 +55,34 @@ interface iResolver {
     function dnsRecord(bytes32 node, bytes32 name, uint16 resource) external view returns (bytes memory);
 }
 
-interface iDev3 is iERC165, iERC173, iENSIP10 {
+interface iSNR is iERC165, iERC173, iENSIP10 {
     function jsonFile(bytes calldata _request) external view returns (string memory);
 
-    function getSigner(string calldata _msg, bytes calldata _signature) external pure returns (address _signer);
+    function getSigner(bytes32 digest, bytes calldata _signature) external pure returns (address _signer);
 
     function transferOwnership(address _newOwner) external payable;
 
-    function setCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
+    //function setCoreDomain(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
 
-    function setCoreDomain(bytes32 _node, address _approver, string calldata _gateway, string calldata _fallback)
-        external
-        payable;
+    //function setCoreDomain(bytes32 _node, address _approver, string calldata _gateway, string calldata _fallback)
+    //    external
+    //    payable;
 
-    function removeCoreDomain(bytes32 _node) external payable;
+    //function removeCoreDomain(bytes32 _node) external payable;
 
-    function updateYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
+    //function updateYourENS(bytes32 _node, string calldata _gateway, string calldata _fallback) external payable;
 
-    function setupYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
-        external
-        payable;
+    //function setupYourENS(bytes32 _node, address _signer, string calldata _gateway, string calldata _fallback)
+    //    external
+    //    payable;
 
-    function setApprovedSigner(bytes32 _node, address _signer, bool _set) external payable;
+    //function setApprovedSigner(bytes32 _node, address _signer, bool _set) external payable;
 
-    function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable;
+    //function setCoreApprover(bytes32 _node, address _approver, bool _set) external payable;
 
     function setWrapper(address _wrapper, bool _set) external payable;
 
-    function setChainID() external;
+    //function setChainID() external;
 
     function withdraw(address _token, uint256 _balance) external;
 
