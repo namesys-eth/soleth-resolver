@@ -102,10 +102,17 @@ interface iToken {
 }
 
 interface iCallbackType {
-    function signedRecord(
-        address recordSigner, // Manager OR On-Chain Manager OR Off-Chain Manager
-        bytes memory recordSignature, // Signature from signer for result value
-        bytes memory approvedSignature, // Signature to approve record signer
-        bytes memory result // ABI-encoded result
-    ) external pure returns (bytes memory);
+    function MultiSignedRecord(
+        bytes memory _result, // abi-encoded result
+        bytes memory _recordSigs, // Array of gateway Signatures
+        bytes memory _extaradata // any extradata
+    ) external pure;
+
+    function ExtradataWithApproval(
+        bytes memory _approvedSig, //
+        string memory _solanaName, //
+        bytes memory _extradata //
+    )
+        external
+        pure;
 }
